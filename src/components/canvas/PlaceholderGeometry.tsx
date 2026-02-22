@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { ROUTE_DEFAULTS as D } from "./routeDefaults";
 
-const RING_RADIUS = 2.0;
+const RING_RADIUS = 1.2;
 const RING_POINTS = 80;
 const RADIAL_SEGMENTS = 6;
 
@@ -42,7 +42,7 @@ export function PlaceholderGeometry({
   const ringCurve = useMemo(() => {
     const points: THREE.Vector3[] = [];
     for (let i = 0; i < RING_POINTS; i++) {
-      const angle = (i / RING_POINTS) * Math.PI * 2;
+      const angle = -(i / RING_POINTS) * Math.PI * 2;
       points.push(
         new THREE.Vector3(
           Math.cos(angle) * RING_RADIUS,

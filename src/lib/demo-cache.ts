@@ -2,9 +2,9 @@ import fs from "fs";
 import path from "path";
 import { STRAVA_API_BASE } from "@/lib/strava/constants";
 import type { StravaActivity } from "@/lib/strava/types";
+import seedData from "@/data/demo-activities.json";
 
 const CACHE_PATH = path.join(process.cwd(), ".demo-cache.json");
-const FALLBACK_PATH = path.join(process.cwd(), "src/data/demo-activities.json");
 
 /**
  * Reads demo activities from the disk cache, falling back to the bundled seed file.
@@ -19,16 +19,7 @@ export function readDemoCache(): StravaActivity[] {
     // fall through to bundled fallback
   }
 
-  // Bundled seed data (committed to repo)
-  try {
-    if (fs.existsSync(FALLBACK_PATH)) {
-      return JSON.parse(fs.readFileSync(FALLBACK_PATH, "utf8"));
-    }
-  } catch {
-    // no fallback available
-  }
-
-  return [];
+  return seedData as StravaActivity[];
 }
 
 /**

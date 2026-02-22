@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
@@ -42,13 +42,24 @@ export function RunCounter({
   const activities = useActivityStore((s) => s.activities);
   const hiddenGoalIds = useSettingsStore((s) => s.hiddenGoalIds);
 
-  // Show on scroll, auto-hide after 2s of no change
-  useEffect(() => {
+  const resetHideTimer = useCallback(() => {
     setVisible(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
     hideTimer.current = setTimeout(() => setVisible(false), 2000);
+  }, []);
+
+  // Show on scroll, auto-hide after 2s of no change
+  useEffect(() => {
+    resetHideTimer();
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
-  }, [currentIndex]);
+  }, [currentIndex, resetHideTimer]);
+
+  // Show on any mouse movement
+  useEffect(() => {
+    const onMove = () => resetHideTimer();
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => window.removeEventListener("mousemove", onMove);
+  }, [resetHideTimer]);
 
   // Keep visible while popover is open
   useEffect(() => {
@@ -57,6 +68,33 @@ export function RunCounter({
       if (hideTimer.current) clearTimeout(hideTimer.current);
     }
   }, [expanded]);
+
+  // Programmatic scroll to a specific activity index
+  const scrollToIndex = useCallback(
+    (index: number) => {
+      if (activities.length <= 1) return;
+      const clamped = Math.max(0, Math.min(index, activities.length - 1));
+      // Find the scroll container (same approach as ScrollIndicator)
+      const candidates = document.querySelectorAll("div");
+      let container: HTMLElement | null = null;
+      for (const el of candidates) {
+        const style = window.getComputedStyle(el);
+        if (
+          (style.overflow === "auto" || style.overflow === "scroll" ||
+           style.overflowY === "auto" || style.overflowY === "scroll") &&
+          el.scrollHeight > el.clientHeight + 100
+        ) {
+          container = el;
+          break;
+        }
+      }
+      if (!container) return;
+      const target = clamped / (activities.length - 1);
+      const scrollable = container.scrollHeight - container.clientHeight;
+      container.scrollTo({ top: target * scrollable, behavior: "smooth" });
+    },
+    [activities.length]
+  );
 
   const shouldShow = visible || expanded;
 
@@ -90,40 +128,70 @@ export function RunCounter({
       onHoverEnd={() => { if (!expanded) hideTimer.current = setTimeout(() => setVisible(false), 1500); }}
     >
       {/* Pill */}
-      <button
-        onClick={() => setExpanded((v) => !v)}
-        className="bg-neutral-900/20 backdrop-blur-lg rounded-full px-5 py-2 flex items-center gap-6 shadow-2xl shadow-black/40 cursor-pointer select-none transition-colors hover:bg-neutral-900/80 duration-500"
-      >
-        {/* Goal rings */}
-        {progresses.map((p) => (
-          <GoalRing key={p.goal.id} progress={p} />
-        ))}
+      <div className="bg-neutral-900/20 backdrop-blur-lg rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-500 hover:bg-neutral-900/80">
+        {/* Prev chevron */}
+        <button
+          onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
+          disabled={currentIndex >= totalRuns - 1}
+          className="group/chevron flex items-center justify-center w-9 h-9 rounded-full transition-all duration-300 cursor-pointer disabled:opacity-0 disabled:pointer-events-none"
+          aria-label="Previous run"
+        >
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+            className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200"
+          >
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+        </button>
 
-        {/* Divider */}
-        {/* {progresses.length > 0 && (
-          <div className="w-px h-4 bg-white/8" />
-        )} */}
+        {/* Center — clickable to expand settings */}
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-6 px-1 py-2 cursor-pointer"
+        >
+          {/* Goal rings */}
+          {progresses.map((p) => (
+            <GoalRing key={p.goal.id} progress={p} />
+          ))}
 
-        {/* Run counter */}
-        <div className="flex items-baseline gap-2 font-sans tabular-nums">
-          <AnimatePresence mode="wait">
-            <motion.span
-              key={currentIndex}
-              initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
-              animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-              exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-              transition={{ duration: reducedMotion ? 0 : 0.12 }}
-              className="text-basefont-bold text-neutral-200 "
-            >
-              {totalRuns - currentIndex}
-            </motion.span>
-          </AnimatePresence>
-          <span className="text-base text-neutral-500 font-bold flex items-center gap-2">
-            <span className="text-sm font-light opacity-50">/</span>
-            <span className="font-light">{totalRuns}</span>
-          </span>
-        </div>
-      </button>
+          {/* Run counter */}
+          <div className="flex items-baseline gap-2 font-sans tabular-nums">
+            <AnimatePresence mode="wait">
+              <motion.span
+                key={currentIndex}
+                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
+                animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                transition={{ duration: reducedMotion ? 0 : 0.12 }}
+                className="text-base font-bold text-neutral-200"
+              >
+                {totalRuns - currentIndex}
+              </motion.span>
+            </AnimatePresence>
+            <span className="text-base text-neutral-500 font-bold flex items-center gap-2">
+              <span className="text-sm font-light opacity-50">/</span>
+              <span className="font-light">{totalRuns}</span>
+            </span>
+          </div>
+        </button>
+
+        {/* Next chevron */}
+        <button
+          onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
+          disabled={currentIndex <= 0}
+          className="group/chevron flex items-center justify-center w-9 h-9 rounded-full transition-all duration-300 cursor-pointer disabled:opacity-0 disabled:pointer-events-none"
+          aria-label="Next run"
+        >
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+            className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200"
+          >
+            <polyline points="9 18 15 12 9 6" />
+          </svg>
+        </button>
+      </div>
 
       {/* Popover with scrim — portaled to body so backdrop-filter works */}
       {createPortal(
@@ -142,9 +210,9 @@ export function RunCounter({
               {/* Panel */}
               <motion.div
                 className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50"
-                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 10 }}
                 transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
               >
                 <div className="bg-neutral-950/90 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/60 overflow-hidden">
