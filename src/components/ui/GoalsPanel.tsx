@@ -11,8 +11,8 @@ import { useActivityStore } from "@/stores/activityStore";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
 
 const GOAL_LABELS: Record<GoalType, string> = {
-  weekly_distance: "Week km",
-  monthly_distance: "Month km",
+  weekly_distance: "Week mi",
+  monthly_distance: "Month mi",
   weekly_runs: "Week runs",
   monthly_runs: "Month runs",
 };
@@ -97,15 +97,15 @@ function GoalRing({
             </linearGradient>
           </defs>
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-neutral-300 tabular-nums">
+        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-neutral-300 tabular-nums">
           {displayValue}
         </span>
       </div>
       <div>
-        <p className="text-[8px] uppercase tracking-[0.15em] text-neutral-600 leading-tight">
+        <p className="text-[11px] uppercase tracking-wide text-neutral-600 leading-tight">
           {GOAL_LABELS[goal.type]}
         </p>
-        <p className="text-[10px] text-neutral-500 tabular-nums">
+        <p className="text-xs text-neutral-500 tabular-nums">
           / {goal.target}
         </p>
       </div>

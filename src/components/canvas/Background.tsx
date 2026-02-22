@@ -4,9 +4,9 @@ import { useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 
-const PARTICLE_COUNT = 200;
-const SPREAD = 40;
-const DEPTH = 200;
+const PARTICLE_COUNT = 120;
+const SPREAD = 50;
+const DEPTH = 1000;
 
 export function Background() {
   const pointsRef = useRef<THREE.Points>(null!);
@@ -21,17 +21,9 @@ export function Background() {
     return arr;
   }, []);
 
-  const sizes = useMemo(() => {
-    const arr = new Float32Array(PARTICLE_COUNT);
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      arr[i] = Math.random() * 2 + 0.5;
-    }
-    return arr;
-  }, []);
-
   useFrame((state) => {
     if (!pointsRef.current) return;
-    pointsRef.current.rotation.y = state.clock.elapsedTime * 0.005;
+    pointsRef.current.rotation.y = state.clock.elapsedTime * 0.003;
   });
 
   return (
@@ -41,16 +33,12 @@ export function Background() {
           attach="attributes-position"
           args={[positions, 3]}
         />
-        <bufferAttribute
-          attach="attributes-size"
-          args={[sizes, 1]}
-        />
       </bufferGeometry>
       <pointsMaterial
-        color="#333333"
-        size={0.08}
+        color="#222222"
+        size={0.06}
         transparent
-        opacity={0.4}
+        opacity={0.3}
         sizeAttenuation
         depthWrite={false}
       />

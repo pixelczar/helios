@@ -2,11 +2,12 @@
 
 import dynamic from "next/dynamic";
 import { useActivities } from "@/hooks/useActivities";
+import { useActivityStore } from "@/stores/activityStore";
 import { HUD } from "@/components/ui/HUD";
 import { RunStats } from "@/components/ui/RunStats";
 import { RunCounter } from "@/components/ui/RunCounter";
 import { ScrollIndicator } from "@/components/ui/ScrollIndicator";
-import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import { SettingsPanel, type TimeRange } from "@/components/ui/SettingsPanel";
 import { GoalsPanel } from "@/components/ui/GoalsPanel";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
 
@@ -17,6 +18,12 @@ const Scene = dynamic(
 
 export default function AppPage() {
   const { activities, isLoading } = useActivities();
+  const timeRange = useActivityStore((s) => s.timeRange) as TimeRange;
+  const fetchAllForRange = useActivityStore((s) => s.fetchAllForRange);
+
+  const handleTimeRangeChange = (range: TimeRange) => {
+    fetchAllForRange(range);
+  };
 
   return (
     <>
@@ -29,7 +36,10 @@ export default function AppPage() {
             <RunStats />
             <RunCounter />
             <ScrollIndicator />
-            <ThemeToggle />
+            <SettingsPanel
+              timeRange={timeRange}
+              onTimeRangeChange={handleTimeRangeChange}
+            />
             <GoalsPanel />
           </HUD>
         </>

@@ -1,19 +1,22 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useActivityStore } from "@/stores/activityStore";
 
 export function useActivities() {
   const activities = useActivityStore((s) => s.activities);
   const isLoading = useActivityStore((s) => s.isLoading);
   const error = useActivityStore((s) => s.error);
-  const fetchActivities = useActivityStore((s) => s.fetchActivities);
+  const timeRange = useActivityStore((s) => s.timeRange);
+  const fetchAllForRange = useActivityStore((s) => s.fetchAllForRange);
+  const hasFetched = useRef(false);
 
   useEffect(() => {
-    if (activities.length === 0 && !isLoading) {
-      fetchActivities(1);
+    if (!hasFetched.current) {
+      hasFetched.current = true;
+      fetchAllForRange(timeRange);
     }
-  }, [activities.length, isLoading, fetchActivities]);
+  }, [timeRange, fetchAllForRange]);
 
   return { activities, isLoading, error };
 }

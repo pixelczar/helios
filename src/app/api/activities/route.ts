@@ -4,11 +4,15 @@ import { stravaFetch } from "@/lib/strava/client";
 export async function GET(request: NextRequest) {
   const page = request.nextUrl.searchParams.get("page") || "1";
   const perPage = request.nextUrl.searchParams.get("per_page") || "50";
+  const after = request.nextUrl.searchParams.get("after"); // epoch seconds
 
   try {
-    const res = await stravaFetch(
-      `/athlete/activities?page=${page}&per_page=${perPage}`
-    );
+    let url = `/athlete/activities?page=${page}&per_page=${perPage}`;
+    if (after) {
+      url += `&after=${after}`;
+    }
+
+    const res = await stravaFetch(url);
 
     if (!res.ok) {
       return NextResponse.json(
