@@ -329,7 +329,6 @@ export function ScrollIndicator() {
 
   const handlePointerUp = useCallback(() => {
     isDragging.current = false;
-    setDragging(false);
     if (!hovered) hoverTarget.current = 0;
   }, [hovered]);
 
