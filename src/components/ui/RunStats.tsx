@@ -51,7 +51,7 @@ export function RunStats() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="absolute top-10 left-10 pointer-events-auto"
+        className="absolute top-1/2 -translate-y-1/2 left-10 pointer-events-auto"
       >
         {/* Date */}
         <motion.p
@@ -126,7 +126,7 @@ function Stat({
       <p className="text-[12px] font-mono uppercase tracking-widest text-neutral-600 mb-1">
         {label}
       </p>
-      <p className="text-sm font-sans text-neutral-300 tabular-nums font-light">
+      <p className="text-base italic font-sans text-neutral-300 tabular-nums font-normal">
         {value}
         {unit && (
           <span className="text-xs text-neutral-600 ml-1">{unit}</span>

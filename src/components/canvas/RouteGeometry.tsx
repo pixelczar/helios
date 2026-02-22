@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useEffect } from "react";
-import { extend, useFrame } from "@react-three/fiber";
+import { extend, useFrame, useThree } from "@react-three/fiber";
 import { MeshLineGeometry, MeshLineMaterial } from "meshline";
 import * as THREE from "three";
 import { decodePolyline } from "@/lib/geo/polyline";
@@ -31,6 +31,8 @@ export function RouteGeometry({
 }: RouteGeometryProps) {
   const decodedRoutes = useActivityStore((s) => s.decodedRoutes);
   const controls = useRouteControls();
+  const size = useThree((s) => s.size);
+  const resolution = useMemo(() => new THREE.Vector2(size.width, size.height), [size.width, size.height]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const coreMatRef = useRef<any>(null);
@@ -200,6 +202,7 @@ export function RouteGeometry({
           transparent
           lineWidth={controls.glowWidth}
           color={glowColorVal}
+          resolution={resolution}
           toneMapped={false}
           depthWrite={false}
           depthTest={false}
@@ -220,6 +223,7 @@ export function RouteGeometry({
           transparent
           lineWidth={controls.coreWidth}
           color={coreColor}
+          resolution={resolution}
           toneMapped={false}
           depthWrite={true}
           depthTest={true}
@@ -241,6 +245,7 @@ export function RouteGeometry({
             transparent
             lineWidth={controls.tracerWidth}
             color={coreColor}
+            resolution={resolution}
             toneMapped={false}
             depthWrite={false}
             depthTest={false}

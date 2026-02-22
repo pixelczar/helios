@@ -21,13 +21,13 @@ export default function AppPage() {
   const { activities, isLoading } = useActivities();
   const timeRange = useActivityStore((s) => s.timeRange) as TimeRange;
   const fetchAllForRange = useActivityStore((s) => s.fetchAllForRange);
-  const [levaHidden, setLevaHidden] = useState(false);
+  const [debugVisible, setDebugVisible] = useState(false);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.metaKey && e.key === ".") {
         e.preventDefault();
-        setLevaHidden((h) => !h);
+        setDebugVisible((v) => !v);
       }
     };
     window.addEventListener("keydown", handleKey);
@@ -40,7 +40,7 @@ export default function AppPage() {
 
   return (
     <>
-      <Leva collapsed hidden={levaHidden} />
+      <Leva collapsed hidden={!debugVisible} />
       <LoadingScreen show={isLoading && activities.length === 0} />
 
       {activities.length > 0 && (

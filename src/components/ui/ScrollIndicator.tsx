@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { useReducedMotion } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 
@@ -269,16 +269,33 @@ export function ScrollIndicator() {
     dayPositionsRef.current = data.map((d) =>
       Math.max(0, Math.min(1, d.dayOfYear / todayDayOfYear))
     );
+    // Enforce monotonicity so the tracer never reverses direction.
+    // Activities arrive reverse-chronologically from Strava, but backdated
+    // entries or same-day runs can break strict ordering.
+    const positions = dayPositionsRef.current;
+    if (positions.length > 1) {
+      if (positions[0] >= positions[positions.length - 1]) {
+        for (let i = 1; i < positions.length; i++) {
+          positions[i] = Math.min(positions[i], positions[i - 1]);
+        }
+      } else {
+        for (let i = 1; i < positions.length; i++) {
+          positions[i] = Math.max(positions[i], positions[i - 1]);
+        }
+      }
+    }
     return data;
   }, [activities, yearlyTarget, todayDayOfYear]);
 
   const gradientStops = useMemo(() => {
     if (paceData.length === 0) return [];
-    return paceData.map((d) => {
-      const t = Math.max(0, Math.min(1, d.dayOfYear / todayDayOfYear));
-      const blend = Math.max(0, Math.min(1, (d.ratio - 0.8) / 0.4));
-      return { offset: t, blend };
-    });
+    return paceData
+      .map((d) => {
+        const t = Math.max(0, Math.min(1, d.dayOfYear / todayDayOfYear));
+        const blend = Math.max(0, Math.min(1, (d.ratio - 0.8) / 0.4));
+        return { offset: t, blend };
+      })
+      .sort((a, b) => a.offset - b.offset);
   }, [paceData, todayDayOfYear]);
 
   const scrollToProgress = useCallback(
@@ -434,19 +451,50 @@ export function ScrollIndicator() {
           className="absolute right-10 whitespace-nowrap -translate-y-1/2 flex items-center gap-2 italic"
           style={{ top: "0%" }}
         >
-          <span className="text-base font-medium tabular-nums tracking-wide">
-            {paceData[currentIndex].dayOfYear}
-          </span>
-          <span className="text-sm font-light opacity-30">/</span>
-          <span
-            className="text-base font-medium tabular-nums tracking-wide"
-            style={{
-              color: currentColor,
-              textShadow: `0 0 12px ${currentColor}60`,
-            }}
-          >
-            {paceData[currentIndex].cumMiles.toFixed(1)}mi
-          </span>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentIndex}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className="flex items-center gap-2"
+            >
+              <motion.span
+                variants={{
+                  initial: { opacity: 0, y: 6, filter: "blur(3px)" },
+                  animate: { opacity: 0.5, y: 0, filter: "blur(0px)", transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
+                  exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } },
+                }}
+                className="text-base font-medium tabular-nums tracking-wide"
+              >
+                {paceData[currentIndex].dayOfYear}
+              </motion.span>
+              <motion.span
+                variants={{
+                  initial: { opacity: 0, y: 6, filter: "blur(3px)" },
+                  animate: { opacity: 0.3, y: 0, filter: "blur(0px)", transition: { duration: 0.3, delay: 0.025, ease: [0.25, 0.1, 0.25, 1] } },
+                  exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, delay: 0.015, ease: [0.25, 0.1, 0.25, 1] } },
+                }}
+                className="text-sm font-light"
+              >
+                /
+              </motion.span>
+              <motion.span
+                variants={{
+                  initial: { opacity: 0, y: 6, filter: "blur(3px)" },
+                  animate: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.3, delay: 0.05, ease: [0.25, 0.1, 0.25, 1] } },
+                  exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, delay: 0.03, ease: [0.25, 0.1, 0.25, 1] } },
+                }}
+                className="text-base font-medium tabular-nums tracking-wide"
+                style={{
+                  color: currentColor,
+                  textShadow: `0 0 12px ${currentColor}60`,
+                }}
+              >
+                {paceData[currentIndex].cumMiles.toFixed(1)}mi
+              </motion.span>
+            </motion.div>
+          </AnimatePresence>
         </div>
       )}
 
