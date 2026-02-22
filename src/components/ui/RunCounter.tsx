@@ -26,6 +26,37 @@ const GOAL_TYPE_LABELS: Record<GoalType, { label: string; unit: string }> = {
   monthly_runs: { label: "Monthly runs", unit: "runs" },
 };
 
+const EASE = [0.25, 0.1, 0.25, 1] as const;
+
+const pillItemVariants = {
+  hidden: { opacity: 0, y: 6 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.25, ease: EASE },
+  },
+};
+
+const chevronVariants = {
+  initial: (direction: -1 | 1) => ({
+    opacity: 0,
+    x: direction * -6,
+    width: 0,
+  }),
+  animate: {
+    opacity: 1,
+    x: 0,
+    width: 36,
+    transition: { duration: 0.25, ease: EASE },
+  },
+  exit: (direction: -1 | 1) => ({
+    opacity: 0,
+    x: direction * -6,
+    width: 0,
+    transition: { duration: 0.2, ease: EASE },
+  }),
+};
+
 export function RunCounter({
   timeRange,
   onTimeRangeChange,
@@ -45,7 +76,7 @@ export function RunCounter({
   const resetHideTimer = useCallback(() => {
     setVisible(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setVisible(false), 2000);
+    hideTimer.current = setTimeout(() => setVisible(false), 3500);
   }, []);
 
   // Show on scroll, auto-hide after 2s of no change
@@ -54,9 +85,15 @@ export function RunCounter({
     return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
   }, [currentIndex, resetHideTimer]);
 
-  // Show on any mouse movement
+  // Show on any mouse movement (throttled to avoid excessive state updates)
   useEffect(() => {
-    const onMove = () => resetHideTimer();
+    let lastFire = 0;
+    const onMove = () => {
+      const now = Date.now();
+      if (now - lastFire < 300) return;
+      lastFire = now;
+      resetHideTimer();
+    };
     window.addEventListener("mousemove", onMove, { passive: true });
     return () => window.removeEventListener("mousemove", onMove);
   }, [resetHideTimer]);
@@ -97,6 +134,8 @@ export function RunCounter({
   );
 
   const shouldShow = visible || expanded;
+  const hasPrev = currentIndex < totalRuns - 1;
+  const hasNext = currentIndex > 0;
 
   const asOfDate = useMemo(() => {
     if (currentActivity) return new Date(currentActivity.start_date_local);
@@ -118,80 +157,128 @@ export function RunCounter({
   return (
     <motion.div
       className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto z-20 gap-4"
-      initial={{ opacity: 1, y: 0 }}
-      animate={shouldShow
-        ? { opacity: 1, y: 0, pointerEvents: "auto" as const }
-        : { opacity: 0, y: 8, pointerEvents: "none" as const }
-      }
-      transition={{ duration: reducedMotion ? 0 : 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+      initial="visible"
+      animate={shouldShow ? "visible" : "hidden"}
+      variants={{
+        hidden: {
+          opacity: 0, y: 8, pointerEvents: "none" as const,
+          transition: { duration: reducedMotion ? 0 : 0.4, ease: [0.25, 0.1, 0.25, 1] },
+        },
+        visible: {
+          opacity: 1, y: 0, pointerEvents: "auto" as const,
+          transition: { duration: reducedMotion ? 0 : 0.4, ease: [0.25, 0.1, 0.25, 1] },
+        },
+      }}
       onHoverStart={() => { setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
-      onHoverEnd={() => { if (!expanded) hideTimer.current = setTimeout(() => setVisible(false), 1500); }}
+      onHoverEnd={() => { if (!expanded) hideTimer.current = setTimeout(() => setVisible(false), 2500); }}
     >
-      {/* Pill */}
-      <div className="bg-neutral-900/20 backdrop-blur-lg rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-500 hover:bg-neutral-900/80">
-        {/* Prev chevron */}
-        <button
-          onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
-          disabled={currentIndex >= totalRuns - 1}
-          className="group/chevron flex items-center justify-center w-9 h-9 rounded-full transition-all duration-300 cursor-pointer disabled:opacity-0 disabled:pointer-events-none"
-          aria-label="Previous run"
-        >
-          <svg
-            width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-            className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200"
-          >
-            <polyline points="15 18 9 12 15 6" />
-          </svg>
-        </button>
+      {/* Pill — layout animates width as chevrons mount/unmount */}
+      <motion.div
+        layout
+        transition={{ layout: { duration: reducedMotion ? 0 : 0.3, ease: EASE } }}
+        className="bg-neutral-900/20 backdrop-blur-lg rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-500 hover:bg-neutral-900/80"
+      >
+        {/* Prev chevron — only when not at oldest */}
+        <AnimatePresence initial={false}>
+          {hasPrev && (
+            <motion.button
+              key="prev"
+              custom={-1}
+              variants={chevronVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
+              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden"
+              aria-label="Previous run"
+            >
+              <svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200 flex-none"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            </motion.button>
+          )}
+        </AnimatePresence>
 
         {/* Center — clickable to expand settings */}
-        <button
+        <motion.button
+          layout
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-6 px-1 py-2 cursor-pointer"
+          className="flex items-center gap-6 px-3 py-2 cursor-pointer"
+          variants={{
+            hidden: {},
+            visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
+          }}
         >
           {/* Goal rings */}
           {progresses.map((p) => (
-            <GoalRing key={p.goal.id} progress={p} />
+            <motion.div key={p.goal.id} variants={pillItemVariants} layout>
+              <GoalRing progress={p} />
+            </motion.div>
           ))}
 
           {/* Run counter */}
-          <div className="flex items-baseline gap-2 font-sans tabular-nums">
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={currentIndex}
-                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
-                animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-                transition={{ duration: reducedMotion ? 0 : 0.12 }}
-                className="text-base font-bold text-neutral-200"
-              >
-                {totalRuns - currentIndex}
-              </motion.span>
-            </AnimatePresence>
-            <span className="text-base text-neutral-500 font-bold flex items-center gap-2">
+          <motion.div
+            layout
+            className="flex items-baseline gap-2 font-sans tabular-nums"
+            variants={{
+              hidden: {},
+              visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
+            }}
+          >
+            <motion.div variants={pillItemVariants} layout>
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={currentIndex}
+                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
+                  animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                  exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                  transition={{ duration: reducedMotion ? 0 : 0.12 }}
+                  className="text-base font-bold text-neutral-200"
+                >
+                  {totalRuns - currentIndex}
+                </motion.span>
+              </AnimatePresence>
+            </motion.div>
+            <motion.span
+              className="text-base text-neutral-500 font-bold flex items-baseline gap-2"
+              variants={pillItemVariants}
+              layout
+            >
               <span className="text-sm font-light opacity-50">/</span>
               <span className="font-light">{totalRuns}</span>
-            </span>
-          </div>
-        </button>
+            </motion.span>
+          </motion.div>
+        </motion.button>
 
-        {/* Next chevron */}
-        <button
-          onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
-          disabled={currentIndex <= 0}
-          className="group/chevron flex items-center justify-center w-9 h-9 rounded-full transition-all duration-300 cursor-pointer disabled:opacity-0 disabled:pointer-events-none"
-          aria-label="Next run"
-        >
-          <svg
-            width="14" height="14" viewBox="0 0 24 24" fill="none"
-            stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
-            className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200"
-          >
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-        </button>
-      </div>
+        {/* Next chevron — only when not at newest */}
+        <AnimatePresence initial={false}>
+          {hasNext && (
+            <motion.button
+              key="next"
+              custom={1}
+              variants={chevronVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
+              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden"
+              aria-label="Next run"
+            >
+              <svg
+                width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200 flex-none"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            </motion.button>
+          )}
+        </AnimatePresence>
+      </motion.div>
 
       {/* Popover with scrim — portaled to body so backdrop-filter works */}
       {createPortal(

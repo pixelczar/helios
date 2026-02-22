@@ -387,7 +387,7 @@ export function ScrollIndicator() {
     >
       {/* Year boundary labels */}
       <div className="absolute left-1/2 -translate-x-1/2 -top-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
-        Jan 1
+        Day 1
       </div>
       <div className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
         Today
