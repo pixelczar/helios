@@ -1,14 +1,17 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { LandingPage } from "@/components/ui/LandingPage";
 
-export default async function Home() {
+export default async function AppLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const cookieStore = await cookies();
   const accessToken = cookieStore.get("strava_access_token");
 
-  if (accessToken) {
-    redirect("/app");
+  if (!accessToken) {
+    redirect("/");
   }
 
-  return <LandingPage />;
+  return <>{children}</>;
 }
