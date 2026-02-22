@@ -26,34 +26,38 @@ const GOAL_TYPE_LABELS: Record<GoalType, { label: string; unit: string }> = {
   monthly_runs: { label: "Monthly runs", unit: "runs" },
 };
 
-const EASE = [0.25, 0.1, 0.25, 1] as const;
+const EASE_OUT = [0.25, 0.1, 0.25, 1] as const;
+
+// Gentle spring — smooth with a subtle bounce at the end
+const SPRING = { type: "spring", stiffness: 400, damping: 30 } as const;
+const SPRING_SOFT = { type: "spring", stiffness: 300, damping: 26 } as const;
 
 const pillItemVariants = {
   hidden: { opacity: 0, y: 6 },
   visible: {
     opacity: 1,
     y: 0,
-    transition: { duration: 0.25, ease: EASE },
+    transition: { ...SPRING_SOFT, opacity: { duration: 0.2 } },
   },
 };
 
 const chevronVariants = {
   initial: (direction: -1 | 1) => ({
     opacity: 0,
-    x: direction * -6,
+    x: direction * -4,
     width: 0,
   }),
   animate: {
     opacity: 1,
     x: 0,
     width: 36,
-    transition: { duration: 0.25, ease: EASE },
+    transition: { ...SPRING, opacity: { duration: 0.2 } },
   },
   exit: (direction: -1 | 1) => ({
     opacity: 0,
-    x: direction * -6,
+    x: direction * -4,
     width: 0,
-    transition: { duration: 0.2, ease: EASE },
+    transition: { duration: 0.18, ease: EASE_OUT },
   }),
 };
 
@@ -162,11 +166,11 @@ export function RunCounter({
       variants={{
         hidden: {
           opacity: 0, y: 8, pointerEvents: "none" as const,
-          transition: { duration: reducedMotion ? 0 : 0.4, ease: [0.25, 0.1, 0.25, 1] },
+          transition: reducedMotion ? { duration: 0 } : { duration: 0.35, ease: EASE_OUT },
         },
         visible: {
           opacity: 1, y: 0, pointerEvents: "auto" as const,
-          transition: { duration: reducedMotion ? 0 : 0.4, ease: [0.25, 0.1, 0.25, 1] },
+          transition: reducedMotion ? { duration: 0 } : { ...SPRING_SOFT, opacity: { duration: 0.25 } },
         },
       }}
       onHoverStart={() => { setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
@@ -175,7 +179,7 @@ export function RunCounter({
       {/* Pill — layout animates width as chevrons mount/unmount */}
       <motion.div
         layout
-        transition={{ layout: { duration: reducedMotion ? 0 : 0.3, ease: EASE } }}
+        transition={{ layout: reducedMotion ? { duration: 0 } : SPRING }}
         className="bg-neutral-900/20 backdrop-blur-lg rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-500 hover:bg-neutral-900/80"
       >
         {/* Prev chevron — only when not at oldest */}
