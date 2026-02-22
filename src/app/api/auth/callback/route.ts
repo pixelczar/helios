@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { STRAVA_TOKEN_URL } from "@/lib/strava/constants";
+import { syncDemoCache } from "@/lib/demo-cache";
 
 export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
@@ -53,6 +54,9 @@ export async function GET(request: NextRequest) {
     }),
     { ...cookieOptions, httpOnly: false }
   );
+
+  // Refresh the demo cache in the background so demo users see fresh data
+  syncDemoCache(tokens.access_token).catch(() => {});
 
   return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/app`);
 }

@@ -4,6 +4,7 @@ import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
+import { getRouteColorHex } from "@/lib/colors";
 
 const AHEAD_COLOR = "#00ffcc";
 const BEHIND_COLOR = "#ff8844";
@@ -351,8 +352,9 @@ export function ScrollIndicator() {
 
   if (totalRuns === 0) return null;
 
-  const currentColor =
-    paceData[currentIndex]?.ratio >= 1 ? AHEAD_COLOR : BEHIND_COLOR;
+  const currentColor = paceData[currentIndex]
+    ? getRouteColorHex(paceData[currentIndex].ratio)
+    : BEHIND_COLOR;
 
   return (
     <div

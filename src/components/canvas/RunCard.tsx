@@ -17,6 +17,7 @@ interface RunCardProps {
   zPosition: number;
   totalRuns: number;
   paceRatio: number;
+  prevPaceRatio: number;
   isFocused: boolean;
   onSelect: () => void;
 }
@@ -27,6 +28,7 @@ export function RunCard({
   zPosition,
   totalRuns,
   paceRatio,
+  prevPaceRatio,
   isFocused,
   onSelect,
 }: RunCardProps) {
@@ -42,6 +44,11 @@ export function RunCard({
   const color = useMemo(
     () => getRouteColor(paceRatio),
     [paceRatio]
+  );
+
+  const colorEnd = useMemo(
+    () => getRouteColor(prevPaceRatio),
+    [prevPaceRatio]
   );
 
   useFrame(() => {
@@ -67,10 +74,10 @@ export function RunCard({
       if ((child as THREE.Mesh).material) {
         const mat = (child as THREE.Mesh).material as THREE.Material & {
           opacity: number;
-          userData: { baseOpacity?: number };
+          userData: { baseOpacity?: number; skipVisibility?: boolean };
         };
         const base = mat.userData?.baseOpacity ?? 1.0;
-        mat.opacity = base * vis;
+        mat.opacity = mat.userData?.skipVisibility ? base : base * vis;
       }
     });
 
@@ -102,6 +109,7 @@ export function RunCard({
         activityId={activity.id}
         polyline={activity.map.summary_polyline}
         color={color}
+        colorEnd={colorEnd}
         showTracer={isFocused}
         averageSpeed={activity.average_speed}
         maxSpeed={activity.max_speed}

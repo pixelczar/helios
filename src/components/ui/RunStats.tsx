@@ -75,7 +75,7 @@ export function RunStats() {
           className="text-9xl font-black italic text-foreground tracking-tighter"
         >
           {formatDistance(currentActivity.distance)}
-          <span className="text-lg text-neutral-500 ml-2 font-normal tracking-normal italic">
+          <span className="text-base text-neutral-500 ml-2 font-normal tracking-normal italic">
             mi
           </span>
         </motion.p>

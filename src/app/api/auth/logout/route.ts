@@ -8,6 +8,7 @@ export async function GET() {
   cookieStore.delete("strava_refresh_token");
   cookieStore.delete("strava_token_expires_at");
   cookieStore.delete("strava_athlete");
+  cookieStore.delete("demo_mode");
 
   return NextResponse.redirect(
     `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/`

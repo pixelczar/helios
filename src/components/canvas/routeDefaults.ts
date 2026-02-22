@@ -1,8 +1,8 @@
 export const ROUTE_DEFAULTS = {
   // Core
-  coreWidth: 0.04,
+  coreWidth: 0.016,
   coreOpacity: 1.0,
-  coreBrightness: 1.9,
+  coreBrightness: 1.5,
 
   // Glow
   glowWidth: 0.01,
@@ -17,7 +17,7 @@ export const ROUTE_DEFAULTS = {
   tracerOpacity: 0.85,
   tracerSpeed: 0.25,
   tracerDashArray: 1.0,
-  tracerDashRatio: 0.93,
+  tracerDashRatio: 0.985,
 
   // Gradient
   gradHoldEnd: 0.3,
@@ -28,13 +28,13 @@ export const ROUTE_DEFAULTS = {
 
   // Start Cap
   capEnabled: true,
-  capGlowRadius: 0.07,
-  capGlowOpacity: 0.54,
+  capGlowRadius: 0.04,
+  capGlowOpacity: 0.12,
   capCoreRadius: 0.02,
 
   // Smoothing
   smoothEnabled: true,
-  smoothTension: 0.3,
+  smoothTension: 0.08,
   smoothSubdivisions: 3,
 };
 

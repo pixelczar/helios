@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
@@ -35,10 +35,30 @@ export function RunCounter({
 }) {
   const { currentIndex, totalRuns, currentActivity } = useScrollIndex();
   const [expanded, setExpanded] = useState(false);
+  const [visible, setVisible] = useState(true);
+  const hideTimer = useRef<ReturnType<typeof setTimeout>>(null);
   const reducedMotion = useReducedMotion();
   const goals = useGoalStore((s) => s.goals);
   const activities = useActivityStore((s) => s.activities);
   const hiddenGoalIds = useSettingsStore((s) => s.hiddenGoalIds);
+
+  // Show on scroll, auto-hide after 2s of no change
+  useEffect(() => {
+    setVisible(true);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
+    hideTimer.current = setTimeout(() => setVisible(false), 2000);
+    return () => { if (hideTimer.current) clearTimeout(hideTimer.current); };
+  }, [currentIndex]);
+
+  // Keep visible while popover is open
+  useEffect(() => {
+    if (expanded) {
+      setVisible(true);
+      if (hideTimer.current) clearTimeout(hideTimer.current);
+    }
+  }, [expanded]);
+
+  const shouldShow = visible || expanded;
 
   const asOfDate = useMemo(() => {
     if (currentActivity) return new Date(currentActivity.start_date_local);
@@ -58,7 +78,17 @@ export function RunCounter({
   if (totalRuns === 0) return null;
 
   return (
-    <div className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto z-20 gap-4">
+    <motion.div
+      className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto z-20 gap-4"
+      initial={{ opacity: 1, y: 0 }}
+      animate={shouldShow
+        ? { opacity: 1, y: 0, pointerEvents: "auto" as const }
+        : { opacity: 0, y: 8, pointerEvents: "none" as const }
+      }
+      transition={{ duration: reducedMotion ? 0 : 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+      onHoverStart={() => { setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
+      onHoverEnd={() => { if (!expanded) hideTimer.current = setTimeout(() => setVisible(false), 1500); }}
+    >
       {/* Pill */}
       <button
         onClick={() => setExpanded((v) => !v)}
@@ -83,12 +113,12 @@ export function RunCounter({
               animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
               exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
               transition={{ duration: reducedMotion ? 0 : 0.12 }}
-              className="text-lg font-bold text-neutral-200 "
+              className="text-basefont-bold text-neutral-200 "
             >
-              {currentIndex + 1}
+              {totalRuns - currentIndex}
             </motion.span>
           </AnimatePresence>
-          <span className="text-lg text-neutral-500 font-bold flex items-center gap-2">
+          <span className="text-base text-neutral-500 font-bold flex items-center gap-2">
             <span className="text-sm font-light opacity-50">/</span>
             <span className="font-light">{totalRuns}</span>
           </span>
@@ -139,7 +169,7 @@ export function RunCounter({
         </AnimatePresence>,
         document.body
       )}
-    </div>
+    </motion.div>
   );
 }
 
