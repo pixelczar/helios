@@ -7,6 +7,7 @@ import { RunTimeline } from "./RunTimeline";
 import { PostProcessing } from "./PostProcessing";
 import { Background } from "./Background";
 import { useTheme } from "@/components/providers/ThemeProvider";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 
 interface SceneProps {
   activityCount: number;
@@ -16,15 +17,16 @@ export function Scene({ activityCount }: SceneProps) {
   const pages = Math.max(activityCount, 2);
   const { theme } = useTheme();
   const bgColor = theme === "dark" ? "#050505" : "#f5f5f5";
+  const isMobile = useIsMobile();
 
   return (
     <Canvas
       gl={{
-        antialias: true,
+        antialias: !isMobile,
         alpha: false,
-        powerPreference: "high-performance",
+        powerPreference: isMobile ? "default" : "high-performance",
       }}
-      dpr={[1, 2]}
+      dpr={isMobile ? [1, 1.5] : [1, 2]}
       camera={{ position: [0, 0, 5], fov: 60, near: 0.1, far: 2000 }}
       style={{
         position: "fixed",

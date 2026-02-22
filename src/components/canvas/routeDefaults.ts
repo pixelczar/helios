@@ -17,7 +17,7 @@ export const ROUTE_DEFAULTS = {
   tracerOpacity: 0.85,
   tracerSpeed: 0.25,
   tracerDashArray: 1.0,
-  tracerDashRatio: 0.985,
+  tracerDashRatio: 0.995,
 
   // Gradient
   gradHoldEnd: 0.3,

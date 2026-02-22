@@ -226,7 +226,7 @@ export function ScrollIndicator() {
         ghostRef.current.style.opacity = `${Math.min(ghostOpacity, 0.35)}`;
       }
 
-      // Trail canvas — fading wake particles
+      // Trail canvas — fading wake particles + activity tick marks
       const canvas = trailCanvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext("2d");
@@ -234,6 +234,21 @@ export function ScrollIndicator() {
           const h = canvas.height;
           const cx = canvas.width / 2;
           ctx.clearRect(0, 0, canvas.width, h);
+
+          // Activity tick marks — small dots at each activity's day position
+          const curIdx = useActivityStore.getState().currentIndex;
+          for (let i = 0; i < positions.length; i++) {
+            const y = positions[i] * h;
+            const isCurrent = i === curIdx;
+            ctx.beginPath();
+            ctx.arc(cx, y, isCurrent ? 1.5 : 1, 0, Math.PI * 2);
+            ctx.fillStyle = isCurrent
+              ? "rgba(255, 255, 255, 0.5)"
+              : "rgba(255, 255, 255, 0.12)";
+            ctx.fill();
+          }
+
+          // Trail wake particles
           for (const point of trailHistory.current) {
             const alpha = Math.max(0, 1 - point.age / 0.4) * 0.4;
             const radius = 2 * (1 - point.age / 0.4);
@@ -359,7 +374,7 @@ export function ScrollIndicator() {
   return (
     <div
       ref={trackRef}
-      className="absolute right-4 top-1/2 -translate-y-1/2 h-[40vh] w-8 pointer-events-auto cursor-pointer flex items-center justify-center select-none"
+      className="absolute right-4 top-1/2 -translate-y-1/2 h-[30vh] md:h-[40vh] w-6 md:w-8 pointer-events-auto cursor-pointer flex items-center justify-center select-none"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -370,6 +385,14 @@ export function ScrollIndicator() {
         if (!isDragging.current) hoverTarget.current = 0;
       }}
     >
+      {/* Year boundary labels */}
+      <div className="absolute left-1/2 -translate-x-1/2 -top-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
+        Jan 1
+      </div>
+      <div className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
+        Today
+      </div>
+
       {/* Base track — subtle, barely-there line */}
       <div className="absolute left-1/2 -translate-x-1/2 w-[1.5px] h-full bg-white/4 rounded-full" />
 
@@ -450,7 +473,7 @@ export function ScrollIndicator() {
       {paceData[currentIndex] && (
         <div
           ref={labelRef}
-          className="absolute right-10 whitespace-nowrap -translate-y-1/2 flex items-center gap-2 italic"
+          className="absolute right-10 whitespace-nowrap -translate-y-1/2 hidden md:flex items-center gap-2 italic"
           style={{ top: "0%" }}
         >
           <AnimatePresence mode="wait">

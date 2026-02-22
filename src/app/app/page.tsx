@@ -18,10 +18,11 @@ const Scene = dynamic(
 );
 
 export default function AppPage() {
-  const { activities, isLoading } = useActivities();
+  const { activities, isLoading, error } = useActivities();
   const timeRange = useActivityStore((s) => s.timeRange) as TimeRange;
   const fetchAllForRange = useActivityStore((s) => s.fetchAllForRange);
   const [debugVisible, setDebugVisible] = useState(false);
+  const doneWithNoData = !isLoading && activities.length === 0;
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -42,6 +43,20 @@ export default function AppPage() {
     <>
       <Leva collapsed hidden={!debugVisible} />
       <LoadingScreen show={isLoading && activities.length === 0} />
+
+      {doneWithNoData && (
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[#050505] text-neutral-400">
+          <p className="text-sm tracking-wide">
+            {error ? "Failed to load activities" : "No runs found"}
+          </p>
+          <a
+            href="/"
+            className="mt-4 text-xs text-neutral-600 underline underline-offset-4 hover:text-neutral-400 transition-colors"
+          >
+            Back to home
+          </a>
+        </div>
+      )}
 
       {activities.length > 0 && (
         <>

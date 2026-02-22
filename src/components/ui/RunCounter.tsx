@@ -79,7 +79,7 @@ export function RunCounter({
 
   return (
     <motion.div
-      className="absolute bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto z-20 gap-4"
+      className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto z-20 gap-4"
       initial={{ opacity: 1, y: 0 }}
       animate={shouldShow
         ? { opacity: 1, y: 0, pointerEvents: "auto" as const }

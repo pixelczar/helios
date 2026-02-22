@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const cookieStore = await cookies();
 
   cookieStore.set("demo_mode", "true", {
@@ -12,7 +12,8 @@ export async function GET() {
     path: "/",
   });
 
-  return NextResponse.redirect(
-    `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/app`
-  );
+  const url = request.nextUrl.clone();
+  url.pathname = "/app";
+  url.search = "";
+  return NextResponse.redirect(url);
 }

@@ -7,9 +7,10 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
 
   if (!code) {
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_BASE_URL}?error=no_code`
-    );
+    const errorUrl = request.nextUrl.clone();
+    errorUrl.pathname = "/";
+    errorUrl.search = "?error=no_code";
+    return NextResponse.redirect(errorUrl);
   }
 
   const tokenRes = await fetch(STRAVA_TOKEN_URL, {
@@ -24,9 +25,10 @@ export async function GET(request: NextRequest) {
   });
 
   if (!tokenRes.ok) {
-    return NextResponse.redirect(
-      `${process.env.NEXT_PUBLIC_BASE_URL}?error=token_exchange_failed`
-    );
+    const errorUrl = request.nextUrl.clone();
+    errorUrl.pathname = "/";
+    errorUrl.search = "?error=token_exchange_failed";
+    return NextResponse.redirect(errorUrl);
   }
 
   const tokens = await tokenRes.json();
@@ -58,5 +60,8 @@ export async function GET(request: NextRequest) {
   // Refresh the demo cache in the background so demo users see fresh data
   syncDemoCache(tokens.access_token).catch(() => {});
 
-  return NextResponse.redirect(`${process.env.NEXT_PUBLIC_BASE_URL}/app`);
+  const appUrl = request.nextUrl.clone();
+  appUrl.pathname = "/app";
+  appUrl.search = "";
+  return NextResponse.redirect(appUrl);
 }

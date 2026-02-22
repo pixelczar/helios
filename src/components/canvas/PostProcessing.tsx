@@ -4,8 +4,10 @@ import { useRef } from "react";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
 import { useControls, folder, button } from "leva";
 import { POST_DEFAULTS as D } from "./routeDefaults";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 
 export function PostProcessing() {
+  const isMobile = useIsMobile();
   const values = useControls("Post Processing", {
     Bloom: folder({
       intensity: { value: D.intensity, min: 0, max: 5, step: 0.05, label: "Intensity" },
@@ -41,7 +43,7 @@ export function PostProcessing() {
   return (
     <EffectComposer>
       <Bloom
-        intensity={values.intensity}
+        intensity={isMobile ? values.intensity * 0.5 : values.intensity}
         luminanceThreshold={values.threshold}
         luminanceSmoothing={values.smoothing}
         mipmapBlur

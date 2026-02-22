@@ -2,6 +2,7 @@
 
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
+import { PhotoStrip } from "./PhotoStrip";
 import {
   formatDistance,
   formatPace,
@@ -51,7 +52,7 @@ export function RunStats() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="absolute top-1/2 -translate-y-1/2 left-10 pointer-events-auto"
+        className="absolute bottom-24 left-4 right-4 md:bottom-auto md:right-auto md:top-1/2 md:-translate-y-1/2 md:left-10 pointer-events-auto"
       >
         {/* Date */}
         <motion.p
@@ -69,10 +70,20 @@ export function RunStats() {
           {currentActivity.name}
         </motion.p>
 
+        {/* Indoor/manual activity badge */}
+        {!currentActivity.map.summary_polyline && (
+          <motion.p
+            variants={itemVariants(1, reducedMotion)}
+            className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-2"
+          >
+            Indoor run
+          </motion.p>
+        )}
+
         {/* Distance — big, fat, italic */}
         <motion.p
           variants={itemVariants(2, reducedMotion)}
-          className="text-9xl font-black italic text-foreground tracking-tighter"
+          className="text-6xl md:text-9xl font-black italic text-foreground tracking-tighter"
         >
           {formatDistance(currentActivity.distance)}
           <span className="text-base text-neutral-500 ml-2 font-normal tracking-normal italic">
@@ -81,7 +92,7 @@ export function RunStats() {
         </motion.p>
 
         {/* Stat row */}
-        <div className="flex gap-8 mt-5">
+        <div className="flex flex-col gap-3 md:flex-row md:gap-8 mt-5">
           <Stat
             index={3}
             label="Pace"
@@ -103,6 +114,16 @@ export function RunStats() {
             reducedMotion={reducedMotion}
           />
         </div>
+
+        {/* Photos */}
+        {currentActivity.total_photo_count > 0 && (
+          <motion.div variants={itemVariants(6, reducedMotion)}>
+            <PhotoStrip
+              activityId={currentActivity.id}
+              photoCount={currentActivity.total_photo_count}
+            />
+          </motion.div>
+        )}
       </motion.div>
     </AnimatePresence>
   );

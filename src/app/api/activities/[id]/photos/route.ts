@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { stravaFetch } from "@/lib/strava/client";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const size = request.nextUrl.searchParams.get("size") || "600";
 
   try {
-    const res = await stravaFetch(`/activities/${id}/photos?size=600`);
+    const res = await stravaFetch(`/activities/${id}/photos?size=${size}`);
 
     if (!res.ok) {
       return NextResponse.json(

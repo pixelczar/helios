@@ -6,6 +6,7 @@ import { useFrame, ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { StravaActivity } from "@/lib/strava/types";
 import { RouteGeometry } from "./RouteGeometry";
+import { PlaceholderGeometry } from "./PlaceholderGeometry";
 import { MapOverlay } from "./MapOverlay";
 import { getRouteColor } from "@/lib/colors";
 import { useActivityStore } from "@/stores/activityStore";
@@ -57,7 +58,7 @@ export function RunCard({
     // How far this run is from the current scroll center (0 = centered, 1 = far)
     const distFromCenter = Math.abs(scroll.offset - scrollCenter) / scrollSegment;
 
-    // Visibility: aggressive falloff — fully visible when centered, nearly gone when 1 run away
+    // Visibility: sharp falloff so only the focused run is prominent
     const visibility = THREE.MathUtils.clamp(
       1 - distFromCenter * 1.2,
       0,
@@ -68,7 +69,7 @@ export function RunCard({
     const scale = THREE.MathUtils.lerp(0.3, 1.0, visibility);
     groupRef.current.scale.setScalar(scale);
 
-    // Opacity — steep power curve so adjacent runs are very faint
+    // Opacity — cubic curve for aggressive fade on neighbors
     const vis = Math.pow(visibility, 3.0);
     groupRef.current.traverse((child) => {
       if ((child as THREE.Mesh).material) {
@@ -105,15 +106,19 @@ export function RunCard({
         document.body.style.cursor = "default";
       }}
     >
-      <RouteGeometry
-        activityId={activity.id}
-        polyline={activity.map.summary_polyline}
-        color={color}
-        colorEnd={colorEnd}
-        showTracer={isFocused}
-        averageSpeed={activity.average_speed}
-        maxSpeed={activity.max_speed}
-      />
+      {activity.map.summary_polyline ? (
+        <RouteGeometry
+          activityId={activity.id}
+          polyline={activity.map.summary_polyline}
+          color={color}
+          colorEnd={colorEnd}
+          showTracer={isFocused}
+          averageSpeed={activity.average_speed}
+          maxSpeed={activity.max_speed}
+        />
+      ) : (
+        <PlaceholderGeometry color={color} colorEnd={colorEnd} showTracer={isFocused} />
+      )}
       {showMapOverlay && decodedRoute?.normParams && decodedRoute.points.length > 0 && (
         <MapOverlay
           activityId={activity.id}
