@@ -6,6 +6,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { RunCard } from "./RunCard";
 import { useActivityStore } from "@/stores/activityStore";
+import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 
 const RUN_SPACING = 20;
 
@@ -13,11 +14,19 @@ export function RunTimeline() {
   const scroll = useScroll();
   const groupRef = useRef<THREE.Group>(null!);
   const activities = useActivityStore((s) => s.activities);
+  const currentIndex = useActivityStore((s) => s.currentIndex);
   const setScrollState = useActivityStore((s) => s.setScrollState);
+  const yearlyTarget = useGoalStore((s) => s.yearlyTarget);
 
-  const allSpeeds = useMemo(
-    () => activities.map((a) => a.average_speed),
-    [activities]
+  // Compute pace ratio for each activity (matches scroll indicator colors)
+  const paceRatios = useMemo(
+    () =>
+      activities.map((a) => {
+        const date = new Date(a.start_date_local);
+        const { ratio } = calculateYearlyPaceAtDate(activities, yearlyTarget, date);
+        return ratio;
+      }),
+    [activities, yearlyTarget]
   );
 
   const scrollToIndex = useCallback(
@@ -51,7 +60,8 @@ export function RunTimeline() {
           index={index}
           zPosition={-index * RUN_SPACING}
           totalRuns={activities.length}
-          allSpeeds={allSpeeds}
+          paceRatio={paceRatios[index]}
+          isFocused={index === currentIndex}
           onSelect={() => scrollToIndex(index)}
         />
       ))}

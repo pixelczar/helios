@@ -136,6 +136,6 @@ export const useGoalStore = create<GoalState>()(
 
       setYearlyTarget: (target) => set({ yearlyTarget: target }),
     }),
-    { name: "fun-run-goals", version: 3 }
+    { name: "helios-goals", version: 3 }
   )
 );

@@ -28,6 +28,12 @@ export interface DecodedRoute {
   activityId: number;
   points: [number, number][]; // [lat, lng] raw
   normalized: [number, number][]; // centered + scaled for 3D
+  normParams?: {
+    centerLat: number;
+    centerLng: number;
+    cosLat: number;
+    scale: number;
+  };
 }
 
 export interface ActivityPhoto {

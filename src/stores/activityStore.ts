@@ -3,7 +3,7 @@
 import { create } from "zustand";
 import type { StravaActivity, DecodedRoute } from "@/lib/strava/types";
 import { decodePolyline } from "@/lib/geo/polyline";
-import { normalizeRoute } from "@/lib/geo/normalize";
+import { normalizeRoute, getNormalizationParams } from "@/lib/geo/normalize";
 import { simplifyRoute } from "@/lib/geo/simplify";
 
 interface ActivityState {
@@ -41,12 +41,14 @@ function decodeActivities(
     if (activity.map.summary_polyline && !newRoutes.has(activity.id)) {
       const points = decodePolyline(activity.map.summary_polyline);
       const simplified =
-        points.length > 500 ? simplifyRoute(points) : points;
-      const normalized = normalizeRoute(simplified, 8);
+        points.length > 800 ? simplifyRoute(points, 0.00002) : points;
+      const normalized = normalizeRoute(simplified, 5);
+      const normParams = getNormalizationParams(simplified, 5);
       newRoutes.set(activity.id, {
         activityId: activity.id,
         points,
         normalized,
+        normParams: normParams ?? undefined,
       });
     }
   }
@@ -157,8 +159,9 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
     if (!polyline) return;
 
     const points = decodePolyline(polyline);
-    const simplified = points.length > 500 ? simplifyRoute(points) : points;
-    const normalized = normalizeRoute(simplified, 8);
+    const simplified = points.length > 800 ? simplifyRoute(points, 0.00002) : points;
+    const normalized = normalizeRoute(simplified, 5);
+    const normParams = getNormalizationParams(simplified, 5);
 
     set((state) => {
       const newRoutes = new Map(state.decodedRoutes);
@@ -166,6 +169,7 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
         activityId: activity.id,
         points,
         normalized,
+        normParams: normParams ?? undefined,
       });
       return { decodedRoutes: newRoutes };
     });

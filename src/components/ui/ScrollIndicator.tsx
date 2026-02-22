@@ -1,51 +1,94 @@
 "use client";
 
-import { useState, useRef, useCallback, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
+import { useReducedMotion } from "framer-motion";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 
-// Ahead of pace = cyan, behind = amber, on pace = white
 const AHEAD_COLOR = "#00ffcc";
 const BEHIND_COLOR = "#ff8844";
 const NEUTRAL_COLOR = "#555555";
+
+function buildMask(progress: number, t: number): string {
+  const p = progress * 100;
+  const spread = 20 + t * 80;
+  const edge = 0.05 + t * 0.65;
+  return `linear-gradient(to bottom,rgba(255,255,255,${edge}) 0%,rgba(255,255,255,${edge}) ${Math.max(0, p - spread)}%,rgba(255,255,255,1) ${Math.max(0, p - 5)}%,rgba(255,255,255,1) ${Math.min(100, p + 5)}%,rgba(255,255,255,${edge}) ${Math.min(100, p + spread)}%,rgba(255,255,255,${edge}) 100%)`;
+}
+
+// Velocity-aware spring — overshoots then settles
+function springLerp(current: number, target: number, velocity: number, stiffness: number, damping: number, dt: number) {
+  const displacement = current - target;
+  const springForce = -stiffness * displacement;
+  const dampingForce = -damping * velocity;
+  const acceleration = springForce + dampingForce;
+  const newVelocity = velocity + acceleration * dt;
+  const newValue = current + newVelocity * dt;
+  return { value: newValue, velocity: newVelocity };
+}
 
 export function ScrollIndicator() {
   const currentIndex = useActivityStore((s) => s.currentIndex);
   const activities = useActivityStore((s) => s.activities);
   const yearlyTarget = useGoalStore((s) => s.yearlyTarget);
+  const reducedMotion = useReducedMotion();
   const trackRef = useRef<HTMLDivElement>(null);
+  const paceTrackRef = useRef<HTMLDivElement>(null);
+  const glowRef = useRef<HTMLDivElement>(null);
+  const dotRef = useRef<HTMLDivElement>(null);
+  const dotCoreRef = useRef<HTMLDivElement>(null);
+  const ghostRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const trailCanvasRef = useRef<HTMLCanvasElement>(null);
   const isDragging = useRef(false);
   const [hovered, setHovered] = useState(false);
 
+  // Smooth interpolation state
+  const hoverTarget = useRef(0);
+  const hoverT = useRef(0);
+  const smoothProgress = useRef(0);
+  const scrollContainerRef = useRef<HTMLElement | null>(null);
+  const rafId = useRef(0);
+
+  // Delayed dot — spring physics
+  const delayedProgress = useRef(0);
+  const dotVelocity = useRef(0);
+
+  // Ghost trail — even more delayed
+  const ghostProgress = useRef(0);
+  const ghostVelocity = useRef(0);
+
+  // Trail history for fading wake
+  const trailHistory = useRef<{ pos: number; age: number }[]>([]);
+
+  // Pulse phase for breathing glow
+  const pulsePhase = useRef(0);
+
+  // Previous scroll progress for delta detection
+  const prevScrollProgress = useRef(0);
+
   const totalRuns = activities.length;
-  const progress = totalRuns > 1 ? currentIndex / (totalRuns - 1) : 0;
+  const discreteProgress = totalRuns > 1 ? currentIndex / (totalRuns - 1) : 0;
 
-  // Compute pace status at each run position
-  const paceData = useMemo(() => {
-    if (activities.length === 0) return [];
-    return activities.map((activity) => {
-      const date = new Date(activity.start_date_local);
-      const { ratio } = calculateYearlyPaceAtDate(
-        activities,
-        yearlyTarget,
-        date
-      );
-      return { ratio };
-    });
-  }, [activities, yearlyTarget]);
+  // Day-of-year timeline: top = day 1, bottom = today
+  const todayDayOfYear = useMemo(() => {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 0);
+    return Math.floor((now.getTime() - startOfYear.getTime()) / 86400000);
+  }, []);
 
-  // Build SVG gradient stops from pace data
-  const gradientStops = useMemo(() => {
-    if (paceData.length === 0) return [];
-    return paceData.map((d, i) => {
-      const t = totalRuns > 1 ? i / (totalRuns - 1) : 0.5;
-      const blend = Math.max(0, Math.min(1, (d.ratio - 0.8) / 0.4));
-      return { offset: t, blend };
-    });
-  }, [paceData, totalRuns]);
+  // Day positions for each activity (fractional 0-1 on the year timeline)
+  const dayPositionsRef = useRef<number[]>([]);
+
+  useEffect(() => {
+    hoverTarget.current = hovered ? 1 : 0;
+  }, [hovered]);
 
   const findScrollContainer = useCallback((): HTMLElement | null => {
+    if (scrollContainerRef.current) {
+      if (scrollContainerRef.current.isConnected) return scrollContainerRef.current;
+      scrollContainerRef.current = null;
+    }
     const candidates = document.querySelectorAll("div");
     for (const el of candidates) {
       const style = window.getComputedStyle(el);
@@ -54,22 +97,211 @@ export function ScrollIndicator() {
          style.overflowY === "auto" || style.overflowY === "scroll") &&
         el.scrollHeight > el.clientHeight + 100
       ) {
+        scrollContainerRef.current = el;
         return el;
       }
     }
     return null;
   }, []);
 
+  // rAF loop — gradient is instant, dot trails with spring physics
+  useEffect(() => {
+    let lastTime = performance.now();
+
+    const tick = (now: number) => {
+      const dt = Math.min((now - lastTime) / 1000, 0.05); // cap dt to avoid explosion
+      lastTime = now;
+
+      // Read continuous scroll progress
+      const container = findScrollContainer();
+      if (container) {
+        const scrollable = container.scrollHeight - container.clientHeight;
+        if (scrollable > 0) {
+          smoothProgress.current = container.scrollTop / scrollable;
+        }
+      }
+
+      const scrollProgress = smoothProgress.current;
+
+      // Map scroll progress (activity-linear) to day-based position on year timeline
+      const positions = dayPositionsRef.current;
+      const numAct = positions.length;
+      let progress: number;
+      if (numAct > 1) {
+        const rawIdx = scrollProgress * (numAct - 1);
+        const lo = Math.max(0, Math.min(Math.floor(rawIdx), numAct - 1));
+        const hi = Math.min(lo + 1, numAct - 1);
+        const frac = rawIdx - lo;
+        progress = lo === hi ? positions[lo] : positions[lo] + (positions[hi] - positions[lo]) * frac;
+      } else if (numAct === 1) {
+        progress = positions[0];
+      } else {
+        progress = scrollProgress;
+      }
+
+      // Detect scroll velocity for dynamic effects
+      const scrollDelta = Math.abs(progress - prevScrollProgress.current);
+      prevScrollProgress.current = progress;
+
+      // Hover interpolation (frame-rate independent)
+      const target = hoverTarget.current;
+      const current = hoverT.current;
+      const factor = 1 - Math.pow(0.92, dt * 60);
+      const next = current + (target - current) * factor;
+      hoverT.current = Math.abs(next - target) < 0.001 ? target : next;
+      const t = hoverT.current;
+
+      // Spring-based delayed dot — higher damping for less overshoot
+      const dotSpring = springLerp(delayedProgress.current, progress, dotVelocity.current, 12, 6, dt);
+      delayedProgress.current = dotSpring.value;
+      dotVelocity.current = dotSpring.velocity;
+
+      // Ghost trail — softer spring, more lag
+      const ghostSpring = springLerp(ghostProgress.current, progress, ghostVelocity.current, 6, 4, dt);
+      ghostProgress.current = ghostSpring.value;
+      ghostVelocity.current = ghostSpring.velocity;
+
+      // Track trail history — sample when moving
+      if (scrollDelta > 0.0005) {
+        trailHistory.current.push({ pos: delayedProgress.current, age: 0 });
+        if (trailHistory.current.length > 12) trailHistory.current.shift();
+      }
+      // Age and cull trail
+      for (let i = trailHistory.current.length - 1; i >= 0; i--) {
+        trailHistory.current[i].age += dt;
+        if (trailHistory.current[i].age > 0.4) {
+          trailHistory.current.splice(i, 1);
+        }
+      }
+
+      // Pulse phase for breathing glow (skip when reduced motion)
+      if (!reducedMotion) {
+        pulsePhase.current += dt * 2.5;
+      }
+
+      // Track width + mask — driven by INSTANT scroll progress
+      if (paceTrackRef.current) {
+        const w = 1.5 + t * 1.5;
+        paceTrackRef.current.style.width = `${w}px`;
+        const mask = buildMask(progress, t);
+        paceTrackRef.current.style.maskImage = mask;
+        paceTrackRef.current.style.webkitMaskImage = mask;
+      }
+
+      // Dot velocity magnitude for dynamic glow intensity
+      const speed = Math.abs(dotVelocity.current);
+      const speedBoost = Math.min(speed * 3, 1);
+
+      // Breathing glow — pulses gently at rest, intensifies when moving
+      const breathe = Math.sin(pulsePhase.current) * 0.5 + 0.5;
+      if (glowRef.current) {
+        const baseSize = 24 + t * 10;
+        const s = baseSize + speedBoost * 16 + breathe * 4;
+        glowRef.current.style.width = `${s}px`;
+        glowRef.current.style.height = `${s}px`;
+        glowRef.current.style.opacity = `${0.25 + t * 0.2 + speedBoost * 0.35 + breathe * 0.05}`;
+      }
+
+      // Dot core — scales up slightly when moving fast
+      if (dotCoreRef.current) {
+        const scale = 1 + speedBoost * 0.3 + t * 0.15;
+        dotCoreRef.current.style.scale = `${scale}`;
+      }
+
+      // Dot position — DELAYED, trails the gradient
+      if (dotRef.current) {
+        dotRef.current.style.top = `${delayedProgress.current * 100}%`;
+      }
+
+      // Label position — follows the delayed dot smoothly
+      if (labelRef.current) {
+        labelRef.current.style.top = `${delayedProgress.current * 100}%`;
+      }
+
+      // Ghost — fainter, even more delayed
+      if (ghostRef.current) {
+        ghostRef.current.style.top = `${ghostProgress.current * 100}%`;
+        const ghostOpacity = Math.min(scrollDelta * 400, 0.3) + speed * 0.15;
+        ghostRef.current.style.opacity = `${Math.min(ghostOpacity, 0.35)}`;
+      }
+
+      // Trail canvas — fading wake particles
+      const canvas = trailCanvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          const h = canvas.height;
+          const cx = canvas.width / 2;
+          ctx.clearRect(0, 0, canvas.width, h);
+          for (const point of trailHistory.current) {
+            const alpha = Math.max(0, 1 - point.age / 0.4) * 0.4;
+            const radius = 2 * (1 - point.age / 0.4);
+            const y = point.pos * h;
+            ctx.beginPath();
+            ctx.arc(cx, y, Math.max(0.5, radius), 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+            ctx.fill();
+          }
+        }
+      }
+
+      rafId.current = requestAnimationFrame(tick);
+    };
+    rafId.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId.current);
+  }, [findScrollContainer]);
+
+  const paceData = useMemo(() => {
+    if (activities.length === 0) {
+      dayPositionsRef.current = [];
+      return [];
+    }
+    let cumMiles = 0;
+    const data = activities.map((activity) => {
+      const date = new Date(activity.start_date_local);
+      const { ratio } = calculateYearlyPaceAtDate(activities, yearlyTarget, date);
+      cumMiles += activity.distance / 1609.344;
+      const startOfYear = new Date(date.getFullYear(), 0, 0);
+      const dayOfYear = Math.floor((date.getTime() - startOfYear.getTime()) / 86400000);
+      return { ratio, dayOfYear, cumMiles };
+    });
+    // Cache day positions (0-1 on year timeline) for the rAF loop
+    dayPositionsRef.current = data.map((d) =>
+      Math.max(0, Math.min(1, d.dayOfYear / todayDayOfYear))
+    );
+    return data;
+  }, [activities, yearlyTarget, todayDayOfYear]);
+
+  const gradientStops = useMemo(() => {
+    if (paceData.length === 0) return [];
+    return paceData.map((d) => {
+      const t = Math.max(0, Math.min(1, d.dayOfYear / todayDayOfYear));
+      const blend = Math.max(0, Math.min(1, (d.ratio - 0.8) / 0.4));
+      return { offset: t, blend };
+    });
+  }, [paceData, todayDayOfYear]);
+
   const scrollToProgress = useCallback(
     (clientY: number) => {
       if (!trackRef.current) return;
       const rect = trackRef.current.getBoundingClientRect();
-      const t = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+      const clickT = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+      // Reverse-map: click position (day-based) → closest activity → scroll position
+      const positions = dayPositionsRef.current;
       const container = findScrollContainer();
-      if (container) {
-        const scrollable = container.scrollHeight - container.clientHeight;
-        container.scrollTop = t * scrollable;
+      if (!container || positions.length === 0) return;
+      let closestIdx = 0;
+      let closestDist = Infinity;
+      for (let i = 0; i < positions.length; i++) {
+        const dist = Math.abs(positions[i] - clickT);
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestIdx = i;
+        }
       }
+      const scrollT = positions.length > 1 ? closestIdx / (positions.length - 1) : 0;
+      const scrollable = container.scrollHeight - container.clientHeight;
+      container.scrollTop = scrollT * scrollable;
     },
     [findScrollContainer]
   );
@@ -79,6 +311,7 @@ export function ScrollIndicator() {
       e.preventDefault();
       e.stopPropagation();
       isDragging.current = true;
+      hoverTarget.current = 1;
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       scrollToProgress(e.clientY);
     },
@@ -96,28 +329,11 @@ export function ScrollIndicator() {
 
   const handlePointerUp = useCallback(() => {
     isDragging.current = false;
-  }, []);
+    setDragging(false);
+    if (!hovered) hoverTarget.current = 0;
+  }, [hovered]);
 
   if (totalRuns === 0) return null;
-
-  // Dot-centered illumination mask (default state)
-  const dotMask = `linear-gradient(
-    to bottom,
-    transparent 0%,
-    transparent ${Math.max(0, progress * 100 - 20)}%,
-    rgba(255,255,255,0.05) ${Math.max(0, progress * 100 - 12)}%,
-    rgba(255,255,255,0.3) ${Math.max(0, progress * 100 - 5)}%,
-    rgba(255,255,255,1) ${progress * 100}%,
-    rgba(255,255,255,0.3) ${Math.min(100, progress * 100 + 5)}%,
-    rgba(255,255,255,0.05) ${Math.min(100, progress * 100 + 12)}%,
-    transparent ${Math.min(100, progress * 100 + 20)}%,
-    transparent 100%
-  )`;
-
-  // Full reveal mask (hover state) — shows the entire gradient
-  const fullMask = "linear-gradient(to bottom, rgba(255,255,255,0.7) 0%, rgba(255,255,255,1) 10%, rgba(255,255,255,1) 90%, rgba(255,255,255,0.7) 100%)";
-
-  const activeMask = hovered || isDragging.current ? fullMask : dotMask;
 
   const currentColor =
     paceData[currentIndex]?.ratio >= 1 ? AHEAD_COLOR : BEHIND_COLOR;
@@ -125,26 +341,34 @@ export function ScrollIndicator() {
   return (
     <div
       ref={trackRef}
-      className="absolute right-4 top-1/2 -translate-y-1/2 h-[40vh] w-8 pointer-events-auto cursor-pointer flex items-center justify-center select-none group"
+      className="absolute right-4 top-1/2 -translate-y-1/2 h-[40vh] w-8 pointer-events-auto cursor-pointer flex items-center justify-center select-none"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       onPointerCancel={handlePointerUp}
       onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      onMouseLeave={() => {
+        setHovered(false);
+        if (!isDragging.current) hoverTarget.current = 0;
+      }}
     >
-      {/* Base track (always visible, very dim) */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-[1.5px] h-full bg-white/[0.04] rounded-full" />
+      {/* Base track — subtle, barely-there line */}
+      <div className="absolute left-1/2 -translate-x-1/2 w-[1.5px] h-full bg-white/4 rounded-full" />
 
-      {/* Colored pace track — mask transitions between dot-centered and full reveal */}
+      {/* Trail canvas — fading wake particles behind the dot */}
+      <canvas
+        ref={trailCanvasRef}
+        width={8}
+        height={400}
+        className="absolute left-1/2 -translate-x-1/2 h-full pointer-events-none"
+        style={{ width: "8px" }}
+      />
+
+      {/* Colored pace track — width + mask interpolated by rAF */}
       <div
+        ref={paceTrackRef}
         className="absolute left-1/2 -translate-x-1/2 h-full rounded-full overflow-hidden"
-        style={{
-          width: hovered ? "3px" : "1.5px",
-          maskImage: activeMask,
-          WebkitMaskImage: activeMask,
-          transition: "width 0.4s cubic-bezier(0.16, 1, 0.3, 1), mask-image 0.4s ease, -webkit-mask-image 0.4s ease",
-        }}
+        style={{ width: "1.5px", willChange: "width" }}
       >
         <svg
           width="3"
@@ -154,13 +378,7 @@ export function ScrollIndicator() {
           className="w-full h-full"
         >
           <defs>
-            <linearGradient
-              id="paceGradient"
-              x1="0"
-              y1="0"
-              x2="0"
-              y2="1"
-            >
+            <linearGradient id="paceGradient" x1="0" y1="0" x2="0" y2="1">
               {gradientStops.length > 0 ? (
                 gradientStops.map((stop, i) => (
                   <stop
@@ -181,67 +399,89 @@ export function ScrollIndicator() {
               )}
             </linearGradient>
           </defs>
-          <rect
-            x="0"
-            y="0"
-            width="3"
-            height="100"
-            fill="url(#paceGradient)"
-          />
+          <rect x="0" y="0" width="3" height="100" fill="url(#paceGradient)" />
         </svg>
       </div>
 
-      {/* Hover label — shows pace status */}
-      <AnimatePresence>
-        {hovered && paceData[currentIndex] && (
-          <motion.div
-            initial={{ opacity: 0, x: 4 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 4 }}
-            transition={{ duration: 0.2 }}
-            className="absolute right-10 whitespace-nowrap"
-            style={{ top: `${progress * 100}%`, transform: "translateY(-50%)" }}
-          >
-            <span
-              className="text-[11px] font-medium tabular-nums"
-              style={{ color: currentColor }}
-            >
-              {paceData[currentIndex].ratio >= 1 ? "+" : ""}
-              {((paceData[currentIndex].ratio - 1) * 100).toFixed(0)}% pace
-            </span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Dot with glow */}
-      <motion.div
-        className="absolute left-1/2 -translate-x-1/2 z-10"
-        animate={{ top: `${progress * 100}%` }}
-        transition={{ type: "spring", damping: 30, stiffness: 300 }}
+      {/* Ghost dot — the faintest trailing shadow */}
+      <div
+        ref={ghostRef}
+        className="absolute left-1/2 -translate-x-1/2 z-5 pointer-events-none"
+        style={{ top: "0%", opacity: 0 }}
       >
-        {/* Glow halo */}
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: hovered ? "32px" : "24px",
-            height: hovered ? "32px" : "24px",
-            opacity: hovered ? 0.5 : 0.3,
-            background: `radial-gradient(circle, ${currentColor} 0%, transparent 70%)`,
-            transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+            width: "14px",
+            height: "14px",
+            background: `radial-gradient(circle, ${currentColor}40 0%, transparent 70%)`,
           }}
         />
-        {/* Dot */}
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: hovered ? "10px" : "8px",
-            height: hovered ? "10px" : "8px",
+            width: "4px",
+            height: "4px",
             backgroundColor: currentColor,
-            boxShadow: `0 0 ${hovered ? "12px" : "8px"} ${currentColor}40`,
-            transition: "all 0.4s cubic-bezier(0.16, 1, 0.3, 1)",
+            opacity: 0.3,
           }}
         />
-      </motion.div>
+      </div>
+
+      {/* Label — always visible, position driven by rAF */}
+      {paceData[currentIndex] && (
+        <div
+          ref={labelRef}
+          className="absolute right-10 whitespace-nowrap -translate-y-1/2 flex items-center gap-2 italic"
+          style={{ top: "0%" }}
+        >
+          <span className="text-base font-medium tabular-nums tracking-wide">
+            {paceData[currentIndex].dayOfYear}
+          </span>
+          <span className="text-sm font-light opacity-30">/</span>
+          <span
+            className="text-base font-medium tabular-nums tracking-wide"
+            style={{
+              color: currentColor,
+              textShadow: `0 0 12px ${currentColor}60`,
+            }}
+          >
+            {paceData[currentIndex].cumMiles.toFixed(1)}mi
+          </span>
+        </div>
+      )}
+
+      {/* Primary dot — spring-delayed, trails the gradient */}
+      <div
+        ref={dotRef}
+        className="absolute left-1/2 -translate-x-1/2 z-10"
+        style={{ top: "0%" }}
+      >
+        {/* Outer glow — breathes and flares with motion */}
+        <div
+          ref={glowRef}
+          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{
+            width: "24px",
+            height: "24px",
+            opacity: 0.25,
+            background: `radial-gradient(circle, ${currentColor} 0%, ${currentColor}40 30%, transparent 70%)`,
+            willChange: "width, height, opacity",
+          }}
+        />
+        {/* Inner core — crisp, scales with velocity */}
+        <div
+          ref={dotCoreRef}
+          className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+          style={{
+            width: "7px",
+            height: "7px",
+            backgroundColor: currentColor,
+            boxShadow: `0 0 6px ${currentColor}80, 0 0 12px ${currentColor}30`,
+            willChange: "transform",
+          }}
+        />
+      </div>
     </div>
   );
 }

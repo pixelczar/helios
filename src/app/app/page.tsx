@@ -7,9 +7,10 @@ import { HUD } from "@/components/ui/HUD";
 import { RunStats } from "@/components/ui/RunStats";
 import { RunCounter } from "@/components/ui/RunCounter";
 import { ScrollIndicator } from "@/components/ui/ScrollIndicator";
-import { SettingsPanel, type TimeRange } from "@/components/ui/SettingsPanel";
-import { GoalsPanel } from "@/components/ui/GoalsPanel";
+import type { TimeRange } from "@/components/ui/SettingsPanel";
 import { LoadingScreen } from "@/components/ui/LoadingScreen";
+import { Leva } from "leva";
+import { useState, useEffect } from "react";
 
 const Scene = dynamic(
   () => import("@/components/canvas/Scene").then((m) => m.Scene),
@@ -20,6 +21,18 @@ export default function AppPage() {
   const { activities, isLoading } = useActivities();
   const timeRange = useActivityStore((s) => s.timeRange) as TimeRange;
   const fetchAllForRange = useActivityStore((s) => s.fetchAllForRange);
+  const [levaHidden, setLevaHidden] = useState(false);
+
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.metaKey && e.key === ".") {
+        e.preventDefault();
+        setLevaHidden((h) => !h);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
 
   const handleTimeRangeChange = (range: TimeRange) => {
     fetchAllForRange(range);
@@ -27,6 +40,7 @@ export default function AppPage() {
 
   return (
     <>
+      <Leva collapsed hidden={levaHidden} />
       <LoadingScreen show={isLoading && activities.length === 0} />
 
       {activities.length > 0 && (
@@ -34,13 +48,11 @@ export default function AppPage() {
           <Scene activityCount={activities.length} />
           <HUD>
             <RunStats />
-            <RunCounter />
-            <ScrollIndicator />
-            <SettingsPanel
+            <RunCounter
               timeRange={timeRange}
               onTimeRangeChange={handleTimeRangeChange}
             />
-            <GoalsPanel />
+            <ScrollIndicator />
           </HUD>
         </>
       )}

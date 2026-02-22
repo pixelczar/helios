@@ -6,14 +6,18 @@ import { useFrame, ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import type { StravaActivity } from "@/lib/strava/types";
 import { RouteGeometry } from "./RouteGeometry";
+import { MapOverlay } from "./MapOverlay";
 import { getRouteColor } from "@/lib/colors";
+import { useActivityStore } from "@/stores/activityStore";
+import { useSettingsStore } from "@/stores/settingsStore";
 
 interface RunCardProps {
   activity: StravaActivity;
   index: number;
   zPosition: number;
   totalRuns: number;
-  allSpeeds: number[];
+  paceRatio: number;
+  isFocused: boolean;
   onSelect: () => void;
 }
 
@@ -22,19 +26,22 @@ export function RunCard({
   index,
   zPosition,
   totalRuns,
-  allSpeeds,
+  paceRatio,
+  isFocused,
   onSelect,
 }: RunCardProps) {
   const scroll = useScroll();
   const groupRef = useRef<THREE.Group>(null!);
   const [hovered, setHovered] = useState(false);
+  const showMapOverlay = useSettingsStore((s) => s.showMapOverlay);
+  const decodedRoute = useActivityStore((s) => s.decodedRoutes.get(activity.id));
 
-  const scrollSegment = 1 / Math.max(totalRuns, 1);
-  const scrollCenter = index * scrollSegment + scrollSegment * 0.5;
+  const scrollSegment = 1 / Math.max(totalRuns - 1, 1);
+  const scrollCenter = totalRuns <= 1 ? 0.5 : index / (totalRuns - 1);
 
   const color = useMemo(
-    () => getRouteColor(activity.average_speed, allSpeeds),
-    [activity.average_speed, allSpeeds]
+    () => getRouteColor(paceRatio),
+    [paceRatio]
   );
 
   useFrame(() => {
@@ -43,9 +50,9 @@ export function RunCard({
     // How far this run is from the current scroll center (0 = centered, 1 = far)
     const distFromCenter = Math.abs(scroll.offset - scrollCenter) / scrollSegment;
 
-    // Visibility: sharp falloff — fully visible when centered, gone when >1.5 runs away
+    // Visibility: aggressive falloff — fully visible when centered, nearly gone when 1 run away
     const visibility = THREE.MathUtils.clamp(
-      1 - distFromCenter * 0.7,
+      1 - distFromCenter * 1.2,
       0,
       1
     );
@@ -54,8 +61,8 @@ export function RunCard({
     const scale = THREE.MathUtils.lerp(0.3, 1.0, visibility);
     groupRef.current.scale.setScalar(scale);
 
-    // Opacity — respect each material's baseOpacity
-    const vis = Math.pow(visibility, 1.5);
+    // Opacity — steep power curve so adjacent runs are very faint
+    const vis = Math.pow(visibility, 3.0);
     groupRef.current.traverse((child) => {
       if ((child as THREE.Mesh).material) {
         const mat = (child as THREE.Mesh).material as THREE.Material & {
@@ -95,7 +102,17 @@ export function RunCard({
         activityId={activity.id}
         polyline={activity.map.summary_polyline}
         color={color}
+        showTracer={isFocused}
+        averageSpeed={activity.average_speed}
+        maxSpeed={activity.max_speed}
       />
+      {showMapOverlay && decodedRoute?.normParams && decodedRoute.points.length > 0 && (
+        <MapOverlay
+          activityId={activity.id}
+          rawPoints={decodedRoute.points}
+          normParams={decodedRoute.normParams}
+        />
+      )}
       {/* Invisible hit area for click detection */}
       <mesh visible={false}>
         <planeGeometry args={[12, 12]} />

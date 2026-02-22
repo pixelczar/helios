@@ -80,7 +80,7 @@ export function chooseBestZoom(
   maxLng: number,
   maxTiles: number = 4
 ): number {
-  for (let z = 16; z >= 10; z--) {
+  for (let z = 18; z >= 10; z--) {
     const coverage = getTileCoverage(minLat, maxLat, minLng, maxLng, z);
     const cols = coverage.maxTileX - coverage.minTileX + 1;
     const rows = coverage.maxTileY - coverage.minTileY + 1;

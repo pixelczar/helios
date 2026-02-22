@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   useGoalStore,
   calculateGoalProgress,
@@ -36,10 +36,12 @@ export function GoalsPanel() {
   if (goals.length === 0) return null;
 
   return (
-    <div className="absolute top-16 right-6 pointer-events-auto flex flex-col gap-3">
-      {progresses.map((p) => (
-        <GoalRing key={p.goal.id} progress={p} />
-      ))}
+    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 pointer-events-auto">
+      <div className="bg-neutral-950/80 backdrop-blur-xl border border-white/6 rounded-full px-4 py-2.5 flex items-center gap-4">
+        {progresses.map((p) => (
+          <GoalRing key={p.goal.id} progress={p} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -50,7 +52,8 @@ function GoalRing({
   progress: ReturnType<typeof calculateGoalProgress>;
 }) {
   const { goal, current, percentage } = progress;
-  const radius = 18;
+  const reducedMotion = useReducedMotion();
+  const radius = 14;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
 
@@ -59,36 +62,36 @@ function GoalRing({
     : String(Math.round(current));
 
   return (
-    <div className="flex items-center gap-2.5">
-      <div className="relative w-11 h-11">
+    <div className="flex items-center gap-1.5">
+      <div className="relative w-8 h-8">
         <svg
-          width="44"
-          height="44"
-          viewBox="0 0 44 44"
+          width="32"
+          height="32"
+          viewBox="0 0 32 32"
           className="-rotate-90"
         >
           {/* Track */}
           <circle
-            cx="22"
-            cy="22"
+            cx="16"
+            cy="16"
             r={radius}
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
+            strokeWidth="1.5"
             className="text-neutral-800"
           />
           {/* Progress */}
           <motion.circle
-            cx="22"
-            cy="22"
+            cx="16"
+            cy="16"
             r={radius}
             fill="none"
             stroke="url(#goalGradient)"
-            strokeWidth="2"
+            strokeWidth="1.5"
             strokeLinecap="round"
             strokeDasharray={circumference}
             animate={{ strokeDashoffset: offset }}
-            transition={{ type: "spring", damping: 20, stiffness: 100 }}
+            transition={reducedMotion ? { duration: 0 } : { type: "spring", damping: 20, stiffness: 100 }}
           />
           <defs>
             <linearGradient id="goalGradient" x1="0" y1="0" x2="1" y2="1">
@@ -97,15 +100,15 @@ function GoalRing({
             </linearGradient>
           </defs>
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-[10px] font-medium text-neutral-300 tabular-nums">
+        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-medium text-neutral-300 tabular-nums">
           {displayValue}
         </span>
       </div>
       <div>
-        <p className="text-[11px] uppercase tracking-wide text-neutral-600 leading-tight">
+        <p className="text-[10px] uppercase tracking-wide text-neutral-600 leading-tight">
           {GOAL_LABELS[goal.type]}
         </p>
-        <p className="text-xs text-neutral-500 tabular-nums">
+        <p className="text-[10px] text-neutral-500 tabular-nums">
           / {goal.target}
         </p>
       </div>

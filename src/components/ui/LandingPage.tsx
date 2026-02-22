@@ -1,22 +1,24 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 export function LandingPage() {
+  const reducedMotion = useReducedMotion();
+
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
       {/* Subtle gradient backdrop */}
       <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,255,204,0.03)_0%,_transparent_70%)]" />
 
       <motion.div
-        initial={{ opacity: 0, y: 30 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+        initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 30, filter: "blur(6px)" }}
+        animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0, filter: "blur(0px)" }}
+        transition={{ duration: reducedMotion ? 0 : 0.8, ease: [0.25, 0.1, 0.25, 1] }}
         className="relative z-10 flex flex-col items-center gap-10"
       >
         <div className="flex flex-col items-center gap-3">
           <h1 className="text-4xl font-extralight tracking-[0.4em] text-neutral-100 uppercase">
-            Fun Run
+            Helios
           </h1>
           <p className="text-sm font-light text-neutral-500 tracking-wide">
             Your runs, visualized in 3D

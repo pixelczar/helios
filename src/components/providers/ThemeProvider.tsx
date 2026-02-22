@@ -22,7 +22,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>("dark");
 
   useEffect(() => {
-    const stored = localStorage.getItem("fun-run-theme") as Theme | null;
+    const stored = localStorage.getItem("helios-theme") as Theme | null;
     if (stored) {
       setTheme(stored);
       document.documentElement.setAttribute("data-theme", stored);
@@ -34,7 +34,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
       const next = prev === "dark" ? "light" : "dark";
-      localStorage.setItem("fun-run-theme", next);
+      localStorage.setItem("helios-theme", next);
       document.documentElement.setAttribute("data-theme", next);
       return next;
     });
