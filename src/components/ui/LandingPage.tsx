@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import { RouteBackground } from "./RouteBackground";
 
 const STAGGER = 0.06;
 const EASE = [0.25, 0.1, 0.25, 1] as const;
@@ -28,8 +29,7 @@ export function LandingPage() {
 
   return (
     <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Subtle gradient backdrop */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_rgba(0,255,204,0.03)_0%,_transparent_70%)]" />
+      <RouteBackground />
 
       <motion.div
         initial="initial"
