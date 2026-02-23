@@ -18,7 +18,7 @@ import { lockSnap } from "@/lib/scrollLock";
 
 const TIME_RANGE_OPTIONS = [
   { value: "year", label: "This year" },
-  { value: "all", label: "Last 200" },
+  { value: "all", label: "Last 42" },
 ] as const;
 
 const GOAL_TYPE_LABELS: Record<GoalType, { label: string; unit: string }> = {

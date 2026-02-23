@@ -118,7 +118,8 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       let hasMore = true;
 
       while (hasMore) {
-        let url = `/api/activities?page=${page}&per_page=200`;
+        const perPage = range === "all" ? 42 : 200;
+        let url = `/api/activities?page=${page}&per_page=${perPage}`;
         if (after) url += `&after=${after}`;
 
         const res = await fetch(url);
@@ -137,7 +138,7 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
           };
         });
 
-        // "all" is capped at one page (200) to avoid overwhelming the renderer
+        // "all" fetches exactly one page (42 activities) — no pagination
         hasMore = range !== "all" && runs.length === 200;
         page++;
       }
