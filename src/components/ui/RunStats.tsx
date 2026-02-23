@@ -52,7 +52,7 @@ export function RunStats() {
         initial="initial"
         animate="animate"
         exit="exit"
-        className="absolute bottom-24 left-4 right-4 md:bottom-auto md:right-auto md:top-1/2 md:-translate-y-1/2 md:left-10 pointer-events-auto"
+        className="absolute bottom-28 left-4 right-4 md:bottom-auto md:right-auto md:top-1/2 md:-translate-y-1/2 md:left-10 pointer-events-auto"
       >
         {/* Date */}
         <motion.p
@@ -92,7 +92,7 @@ export function RunStats() {
         </motion.p>
 
         {/* Stat row */}
-        <div className="flex flex-col gap-3 md:flex-row md:gap-8 mt-5">
+        <div className="flex flex-row gap-8 mt-5">
           <Stat
             index={3}
             label="Pace"

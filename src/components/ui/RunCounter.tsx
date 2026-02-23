@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 import { useTheme } from "@/components/providers/ThemeProvider";
 import {
   useGoalStore,
@@ -13,6 +14,7 @@ import {
 import { useActivityStore } from "@/stores/activityStore";
 import { useSettingsStore } from "@/stores/settingsStore";
 import type { TimeRange } from "@/components/ui/SettingsPanel";
+import { lockSnap } from "@/lib/scrollLock";
 
 const TIME_RANGE_OPTIONS = [
   { value: "year", label: "This year" },
@@ -75,6 +77,7 @@ export function RunCounter({
   const hovering = useRef(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(null);
   const reducedMotion = useReducedMotion();
+  const isMobile = useIsMobile();
   const prevIndexRef = useRef(currentIndex);
   const slideDirection = useRef<1 | -1>(1);
   const goals = useGoalStore((s) => s.goals);
@@ -84,16 +87,17 @@ export function RunCounter({
   const resetHideTimer = useCallback(() => {
     setVisible(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    if (!hovering.current) {
+    if (!hovering.current && !isMobile) {
       hideTimer.current = setTimeout(() => setVisible(false), 3500);
     }
-  }, []);
+  }, [isMobile]);
 
   // Track scroll direction for number slide animation
   useEffect(() => {
     if (currentIndex !== prevIndexRef.current) {
-      // displayed = currentIndex + 1, so when currentIndex increases the number grows → slide up
-      slideDirection.current = currentIndex > prevIndexRef.current ? 1 : -1;
+      // displayed = totalRuns - currentIndex (chronological: oldest=1, newest=N)
+      // when currentIndex increases (scrolling older), displayed number decreases → slide down
+      slideDirection.current = currentIndex > prevIndexRef.current ? -1 : 1;
       prevIndexRef.current = currentIndex;
     }
   }, [currentIndex]);
@@ -145,6 +149,7 @@ export function RunCounter({
         }
       }
       if (!container) return;
+      lockSnap();
       // offset = index / N where N = activities.length (Today at N/N = 1)
       const target = clamped / activities.length;
       const scrollable = container.scrollHeight - container.clientHeight;
@@ -153,10 +158,10 @@ export function RunCounter({
     [activities.length]
   );
 
-  const shouldShow = visible || expanded;
+  const shouldShow = visible || expanded || isMobile;
   const isAtToday = currentIndex >= totalRuns;
-  const hasPrev = currentIndex > 0; // can go to a newer run (lower index)
-  const hasNext = currentIndex < totalRuns; // can go toward Today (higher index)
+  const hasPrev = currentIndex < totalRuns; // can go older / toward Today (higher index)
+  const hasNext = currentIndex > 0; // can go newer (lower index)
 
   const asOfDate = useMemo(() => {
     if (currentActivity) return new Date(currentActivity.start_date_local);
@@ -191,7 +196,7 @@ export function RunCounter({
         },
       }}
       onHoverStart={() => { hovering.current = true; setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
-      onHoverEnd={() => { hovering.current = false; if (!expanded) hideTimer.current = setTimeout(() => setVisible(false), 2500); }}
+      onHoverEnd={() => { hovering.current = false; if (!expanded && !isMobile) hideTimer.current = setTimeout(() => setVisible(false), 2500); }}
     >
       {/* Pill — layout animates width as chevrons mount/unmount */}
       <motion.div
@@ -210,7 +215,7 @@ export function RunCounter({
               animate="animate"
               exit="exit"
               whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
-              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
+              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
               className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
               aria-label="Previous run"
             >
@@ -267,7 +272,7 @@ export function RunCounter({
                     transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
                     className="text-base text-neutral-200 block"
                   >
-                    {currentIndex + 1}
+                    {totalRuns - currentIndex}
                   </motion.span>
                 </AnimatePresence>
               </motion.div>
@@ -294,13 +299,13 @@ export function RunCounter({
               animate="animate"
               exit="exit"
               whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
-              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
+              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
               className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
               aria-label="Next run"
             >
               <svg
-                width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200 flex-none"
               >
                 <polyline points="9 18 15 12 9 6" />

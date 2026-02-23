@@ -5,6 +5,7 @@ import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 import { getRouteColorHex } from "@/lib/colors";
+import { lockSnap } from "@/lib/scrollLock";
 
 const AHEAD_COLOR = "#00ffcc";
 const BEHIND_COLOR = "#ff8844";
@@ -385,7 +386,7 @@ export function ScrollIndicator() {
   return (
     <div
       ref={trackRef}
-      className="absolute right-4 top-1/2 -translate-y-1/2 h-[30vh] md:h-[40vh] w-6 md:w-8 pointer-events-auto cursor-pointer flex items-center justify-center select-none"
+      className="absolute right-4 top-[65%] -translate-y-1/2 h-[30vh] md:top-1/2 md:h-[40vh] w-6 md:w-8 pointer-events-auto cursor-pointer flex items-center justify-center select-none"
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -406,8 +407,15 @@ export function ScrollIndicator() {
           e.stopPropagation();
           const container = findScrollContainer();
           if (container) {
+            lockSnap();
             const scrollable = container.scrollHeight - container.clientHeight;
-            container.scrollTo({ top: scrollable, behavior: "smooth" });
+            // Use instant scroll — the springs in RunTimeline and ScrollIndicator
+            // provide smooth visual transitions. Smooth scrolling would expose
+            // the non-monotonic mapping between scroll position and day-based
+            // timeline position (activities are newest-first, so intermediate
+            // scroll positions map to progressively older/upward day positions
+            // before jumping to Today at the end).
+            container.scrollTo({ top: scrollable, behavior: "instant" });
           }
         }}
         className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-[9px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-300 cursor-pointer ${

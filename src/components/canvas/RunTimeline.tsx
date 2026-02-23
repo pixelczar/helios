@@ -7,6 +7,7 @@ import * as THREE from "three";
 import { RunCard } from "./RunCard";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
+import { isSnapLocked } from "@/lib/scrollLock";
 
 const RUN_SPACING = 20;
 
@@ -57,7 +58,7 @@ export function RunTimeline() {
     let snapClearId: number = 0;
 
     const handleScroll = () => {
-      if (snapping.current) return;
+      if (snapping.current || isSnapLocked()) return;
       clearTimeout(debounceId);
       debounceId = window.setTimeout(() => {
         const scrollable = el.scrollHeight - el.clientHeight;

@@ -3,6 +3,7 @@
 import { useRef, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useActivityStore } from "@/stores/activityStore";
+import { useIsMobile } from "@/hooks/useMediaQuery";
 
 // --- Physics tuning ---
 const PAN_SPEED = 0.004; // pointer px → world units
@@ -13,6 +14,8 @@ const RETURN_K = 0.07; // return-to-center stiffness
 const RETURN_DAMP = 0.80; // return-to-center velocity damping
 const EPSILON = 0.0001; // velocity cutoff
 const DRAG_THRESH = 3; // px before considered a drag
+const MOBILE_Y_BIAS = -1.6; // world units — shifts scene upward on mobile (negative = camera down = content up)
+const MOBILE_CAMERA_Z = 9; // slightly pulled back on mobile for full route visibility
 
 // Shared flag so RunCard can skip onClick after a drag
 let _wasDrag = false;
@@ -23,6 +26,7 @@ export function wasPanDrag() {
 export function CameraPan() {
   const { camera, gl, events } = useThree();
   const currentIndex = useActivityStore((s) => s.currentIndex);
+  const isMobile = useIsMobile();
 
   const ref = useRef({
     // Camera offset from origin
@@ -163,7 +167,8 @@ export function CameraPan() {
     }
 
     camera.position.x = s.x;
-    camera.position.y = s.y;
+    camera.position.y = s.y + (isMobile ? MOBILE_Y_BIAS : 0);
+    camera.position.z = isMobile ? MOBILE_CAMERA_Z : 5;
   });
 
   return null;

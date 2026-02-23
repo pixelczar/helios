@@ -142,15 +142,15 @@ export function TodaySummary() {
       <div className="absolute inset-0" aria-hidden="true">
         {mapUrl && (
           <motion.div
-            initial={reducedMotion ? { opacity: 0.25 } : { opacity: 0, scale: 1.02 }}
-            animate={reducedMotion ? { opacity: 0.25 } : { opacity: 0.25, scale: 1 }}
+            initial={reducedMotion ? { opacity: 0.6 } : { opacity: 0, scale: 1.02 }}
+            animate={reducedMotion ? { opacity: 0.6 } : { opacity: 0.6, scale: 1 }}
             transition={{ duration: 1.5, ease: EASE }}
             className="absolute inset-0"
             style={{
               backgroundImage: `url(${mapUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
-              filter: "saturate(0.4)",
+              filter: "saturate(0.6)",
             }}
           />
         )}
@@ -159,7 +159,7 @@ export function TodaySummary() {
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 70%, black 95%)",
+              "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.35) 80%, rgba(0,0,0,0.85) 100%)",
           }}
         />
       </div>
