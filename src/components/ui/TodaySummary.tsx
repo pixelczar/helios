@@ -184,7 +184,7 @@ export function TodaySummary() {
             <span className="text-6xl md:text-9xl font-black tracking-tighter text-neutral-400 leading-none">
               {todayData.dayOfYear}
             </span>
-            <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-600 mt-1 not-italic">
+            <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1 not-italic">
               Days
             </span>
           </div>
@@ -205,7 +205,7 @@ export function TodaySummary() {
             >
               {todayData.totalMiles.toFixed(1)}
             </span>
-            <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-600 mt-1 not-italic">
+            <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1 not-italic">
               Total Miles
             </span>
           </div>

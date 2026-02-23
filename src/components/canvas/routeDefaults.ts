@@ -19,9 +19,16 @@ export const ROUTE_DEFAULTS = {
   tracerDashArray: 1.0,
   tracerDashRatio: 0.97,
 
-  // Gradient
+  // Gradient (RouteGeometry)
   gradPeakPoint: 0.5,
   gradEndAlpha: 0.01,
+
+  // Gradient (PlaceholderGeometry)
+  gradHoldEnd: 0.1,
+  gradMidPoint: 0.5,
+  gradMidAlpha: 0.5,
+  gradTailPoint: 0.85,
+  gradTailAlpha: 0.1,
 
   // Start Cap
   capEnabled: true,
