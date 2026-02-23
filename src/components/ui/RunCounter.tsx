@@ -95,9 +95,9 @@ export function RunCounter({
   // Track scroll direction for number slide animation
   useEffect(() => {
     if (currentIndex !== prevIndexRef.current) {
-      // displayed = totalRuns - currentIndex (chronological: oldest=1, newest=N)
-      // when currentIndex increases (scrolling older), displayed number decreases → slide down
-      slideDirection.current = currentIndex > prevIndexRef.current ? -1 : 1;
+      // displayed = currentIndex + 1 (1 = newest, N = oldest)
+      // when currentIndex increases (scrolling older), displayed number increases → slide up
+      slideDirection.current = currentIndex > prevIndexRef.current ? 1 : -1;
       prevIndexRef.current = currentIndex;
     }
   }, [currentIndex]);
@@ -160,8 +160,8 @@ export function RunCounter({
 
   const shouldShow = visible || expanded || isMobile;
   const isAtToday = currentIndex >= totalRuns;
-  const hasPrev = currentIndex < totalRuns; // can go older / toward Today (higher index)
-  const hasNext = currentIndex > 0; // can go newer (lower index)
+  const hasPrev = currentIndex > 0; // can go newer (lower index)
+  const hasNext = currentIndex < totalRuns; // can go older / toward Today (higher index)
 
   const asOfDate = useMemo(() => {
     if (currentActivity) return new Date(currentActivity.start_date_local);
@@ -215,7 +215,7 @@ export function RunCounter({
               animate="animate"
               exit="exit"
               whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
-              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
+              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
               className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
               aria-label="Previous run"
             >
@@ -272,7 +272,7 @@ export function RunCounter({
                     transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
                     className="text-base text-neutral-200 block"
                   >
-                    {totalRuns - currentIndex}
+                    {currentIndex + 1}
                   </motion.span>
                 </AnimatePresence>
               </motion.div>
@@ -299,7 +299,7 @@ export function RunCounter({
               animate="animate"
               exit="exit"
               whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
-              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
+              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
               className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
               aria-label="Next run"
             >

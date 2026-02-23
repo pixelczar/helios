@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { fetchMapImage } from "@/lib/geo/mapTiles";
 
-const BASE_OPACITY = 0.85;
+const BASE_OPACITY = 0.95;
 const FADE_SPEED = 1.5; // per second — reaches full in ~430ms
 
 interface MapOverlayProps {
