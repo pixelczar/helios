@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback } from "react";
-import { useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 
 // --- Pre-computed SVG paths from real Strava routes ---
 // Decoded from polylines, Mercator-normalized, scaled to 800×800 viewBox
@@ -140,7 +140,13 @@ export function RouteBackground() {
   const reducedMotion = useReducedMotion() ?? false;
 
   return (
-    <div className="absolute inset-0 z-0" aria-hidden="true">
+    <motion.div
+      className="absolute inset-0 z-0"
+      aria-hidden="true"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: reducedMotion ? 0 : 1.5, ease: [0.25, 0.1, 0.25, 1] }}
+    >
       {/* Ambient layer — medium blur creates color wash */}
       <div
         className="absolute inset-0"
@@ -191,6 +197,6 @@ export function RouteBackground() {
           </g>
         </svg>
       </div>
-    </div>
+    </motion.div>
   );
 }

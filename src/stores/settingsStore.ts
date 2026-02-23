@@ -16,8 +16,8 @@ export const useSettingsStore = create<SettingsState>()(
     (set, get) => ({
       showMapOverlay: true,
       setShowMapOverlay: (show) => set({ showMapOverlay: show }),
-      // Goals hidden from the HUD gauges — "default-weekly-runs" hidden by default
-      hiddenGoalIds: ["default-weekly-runs"],
+      // Goals hidden from the HUD gauges — all default goals hidden by default
+      hiddenGoalIds: ["default-weekly-dist", "default-weekly-runs"],
       toggleGoalVisibility: (id) =>
         set((state) => {
           const hidden = state.hiddenGoalIds.includes(id);
@@ -31,11 +31,11 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: "fun-run-settings",
-      version: 2,
+      version: 3,
       migrate: (persisted, version) => {
         const state = persisted as Record<string, unknown>;
-        if (version < 2) {
-          return { ...state, hiddenGoalIds: ["default-weekly-runs"] };
+        if (version < 3) {
+          return { ...state, hiddenGoalIds: ["default-weekly-dist", "default-weekly-runs"] };
         }
         return state;
       },

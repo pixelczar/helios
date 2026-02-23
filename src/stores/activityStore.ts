@@ -137,7 +137,8 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
           };
         });
 
-        hasMore = runs.length === 200;
+        // "all" is capped at one page (200) to avoid overwhelming the renderer
+        hasMore = range !== "all" && runs.length === 200;
         page++;
       }
 
