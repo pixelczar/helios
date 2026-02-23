@@ -12,7 +12,7 @@ export function LoadingScreen({ show }: { show: boolean }) {
           initial={{ opacity: 1 }}
           exit={reducedMotion ? { opacity: 0 } : { opacity: 0, filter: "blur(8px)" }}
           transition={{ duration: reducedMotion ? 0 : 0.8, ease: [0.25, 0.1, 0.25, 1] }}
-          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#050505]"
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#000000]"
         >
           <motion.div
             initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, filter: "blur(4px)" }}

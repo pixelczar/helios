@@ -14,10 +14,10 @@ interface SceneProps {
 }
 
 export function Scene({ activityCount }: SceneProps) {
-  const pages = Math.max(activityCount, 2);
   const { theme } = useTheme();
-  const bgColor = theme === "dark" ? "#050505" : "#f5f5f5";
+  const bgColor = theme === "dark" ? "#000000" : "#f5f5f5";
   const isMobile = useIsMobile();
+  const pages = Math.max(activityCount, 2);
 
   return (
     <Canvas
@@ -34,17 +34,20 @@ export function Scene({ activityCount }: SceneProps) {
         left: 0,
         width: "100vw",
         height: "100vh",
+        zIndex: 0,
       }}
     >
       <color attach="background" args={[bgColor]} />
       <fog attach="fog" args={[bgColor, 10, 40]} />
       <Suspense fallback={null}>
-        <ScrollControls pages={pages} damping={0.25} distance={1}>
-          {/* No <Scroll> wrapper — we handle Z translation manually.
-              <Scroll> auto-translates children on Y axis which we don't want. */}
-          <Background />
-          <RunTimeline />
-        </ScrollControls>
+        <Background />
+        {activityCount > 0 && (
+          <ScrollControls pages={pages} damping={0.25} distance={1}>
+            {/* No <Scroll> wrapper — we handle Z translation manually.
+                <Scroll> auto-translates children on Y axis which we don't want. */}
+            <RunTimeline />
+          </ScrollControls>
+        )}
         <MapControls
           enableRotate={false}
           enableZoom={false}

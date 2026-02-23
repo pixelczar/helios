@@ -28,7 +28,7 @@ export function LandingPage() {
   const reducedMotion = useReducedMotion();
 
   return (
-    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="min-h-screen bg-[#000000] flex flex-col items-center justify-center relative overflow-hidden">
       <RouteBackground />
 
       <motion.div

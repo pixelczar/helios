@@ -2,6 +2,7 @@
 
 import { useRef } from "react";
 import { EffectComposer, Bloom, Vignette } from "@react-three/postprocessing";
+import { HalfFloatType } from "three";
 import { useControls, folder, button } from "leva";
 import { POST_DEFAULTS as D } from "./routeDefaults";
 import { useIsMobile } from "@/hooks/useMediaQuery";
@@ -41,7 +42,7 @@ export function PostProcessing() {
   });
 
   return (
-    <EffectComposer>
+    <EffectComposer frameBufferType={HalfFloatType}>
       <Bloom
         intensity={isMobile ? values.intensity * 0.5 : values.intensity}
         luminanceThreshold={values.threshold}

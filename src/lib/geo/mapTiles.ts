@@ -105,14 +105,15 @@ export async function fetchMapImage(
     );
   }
 
-  // Soft vignette edge fade — gentle, doesn't fight with rounded corners
+  // Soft vignette — erase edges to transparent (avoids banding from
+  // darkening near-black tiles with multiply)
   const edgeGrad = ctx.createRadialGradient(
-    w / 2, h / 2, Math.min(w, h) * 0.4,
-    w / 2, h / 2, Math.max(w, h) * 0.65
+    w / 2, h / 2, Math.min(w, h) * 0.35,
+    w / 2, h / 2, Math.max(w, h) * 0.6
   );
   edgeGrad.addColorStop(0, "rgba(0,0,0,0)");
-  edgeGrad.addColorStop(1, "rgba(0,0,0,0.4)");
-  ctx.globalCompositeOperation = "multiply";
+  edgeGrad.addColorStop(1, "rgba(0,0,0,1)");
+  ctx.globalCompositeOperation = "destination-out";
   ctx.fillStyle = edgeGrad;
   ctx.fillRect(0, 0, w, h);
   ctx.globalCompositeOperation = "source-over";

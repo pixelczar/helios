@@ -58,7 +58,7 @@ function decodeActivities(
 export const useActivityStore = create<ActivityState>((set, get) => ({
   activities: [],
   decodedRoutes: new Map(),
-  isLoading: false,
+  isLoading: true,
   error: null,
   currentPage: 1,
   hasMore: true,

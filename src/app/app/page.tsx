@@ -45,7 +45,7 @@ export default function AppPage() {
       <LoadingScreen show={isLoading && activities.length === 0} />
 
       {doneWithNoData && (
-        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[#050505] text-neutral-400">
+        <div className="fixed inset-0 z-40 flex flex-col items-center justify-center bg-[#000000] text-neutral-400">
           <p className="text-sm tracking-wide">
             {error ? "Failed to load activities" : "No runs found"}
           </p>
@@ -58,18 +58,16 @@ export default function AppPage() {
         </div>
       )}
 
+      <Scene activityCount={activities.length} />
       {activities.length > 0 && (
-        <>
-          <Scene activityCount={activities.length} />
-          <HUD>
-            <RunStats />
-            <RunCounter
-              timeRange={timeRange}
-              onTimeRangeChange={handleTimeRangeChange}
-            />
-            <ScrollIndicator />
-          </HUD>
-        </>
+        <HUD>
+          <RunStats />
+          <RunCounter
+            timeRange={timeRange}
+            onTimeRangeChange={handleTimeRangeChange}
+          />
+          <ScrollIndicator />
+        </HUD>
       )}
     </>
   );

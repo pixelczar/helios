@@ -35,7 +35,7 @@ export function Background() {
         />
       </bufferGeometry>
       <pointsMaterial
-        color="#222222"
+        color="#111111"
         size={0.06}
         transparent
         opacity={0.3}

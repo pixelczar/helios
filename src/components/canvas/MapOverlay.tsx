@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { fetchMapImage } from "@/lib/geo/mapTiles";
+
+const BASE_OPACITY = 0.65;
+const FADE_SPEED = 1.5; // per second — reaches full in ~430ms
 
 interface MapOverlayProps {
   activityId: number;
@@ -23,6 +27,8 @@ export function MapOverlay({ activityId, rawPoints, normParams }: MapOverlayProp
     x: number;
     y: number;
   } | null>(null);
+  const matRef = useRef<THREE.MeshBasicMaterial>(null!);
+  const fadeProgress = useRef(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +66,17 @@ export function MapOverlay({ activityId, rawPoints, normParams }: MapOverlayProp
     };
   }, [activityId, rawPoints, normParams]);
 
+  // Animate userData.baseOpacity from 0 → BASE_OPACITY so RunCard's
+  // visibility traverse multiplies against the fading-in value.
+  // Always write (not just during fade) because React re-renders reset userData.
+  useFrame((_, delta) => {
+    if (!matRef.current) return;
+    if (fadeProgress.current < BASE_OPACITY) {
+      fadeProgress.current = Math.min(BASE_OPACITY, fadeProgress.current + delta * FADE_SPEED);
+    }
+    matRef.current.userData.baseOpacity = fadeProgress.current;
+  });
+
   const planeGeo = useMemo(() => {
     if (!planeBounds) return null;
     return new THREE.PlaneGeometry(planeBounds.width, planeBounds.height);
@@ -74,14 +91,15 @@ export function MapOverlay({ activityId, rawPoints, normParams }: MapOverlayProp
       renderOrder={-1}
     >
       <meshBasicMaterial
+        ref={matRef}
         map={texture}
         transparent
-        opacity={0.65}
+        opacity={0}
         depthWrite={false}
         depthTest={false}
         toneMapped={false}
         blending={THREE.NormalBlending}
-        userData={{ baseOpacity: 0.65 }}
+        userData={{ baseOpacity: 0 }}
       />
     </mesh>
   );
