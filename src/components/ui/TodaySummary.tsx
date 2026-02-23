@@ -142,15 +142,15 @@ export function TodaySummary() {
       <div className="absolute inset-0" aria-hidden="true">
         {mapUrl && (
           <motion.div
-            initial={reducedMotion ? { opacity: 0.6 } : { opacity: 0, scale: 1.02 }}
-            animate={reducedMotion ? { opacity: 0.6 } : { opacity: 0.6, scale: 1 }}
+            initial={reducedMotion ? { opacity: 0.75 } : { opacity: 0, scale: 1.02 }}
+            animate={reducedMotion ? { opacity: 0.75 } : { opacity: 0.75, scale: 1 }}
             transition={{ duration: 1.5, ease: EASE }}
             className="absolute inset-0"
             style={{
               backgroundImage: `url(${mapUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
-              filter: "saturate(0.6)",
+              filter: "saturate(0.7)",
             }}
           />
         )}

@@ -146,11 +146,11 @@ async function _fetchMapImageInner(
   // Soft vignette — erase edges to transparent (avoids banding from
   // darkening near-black tiles with multiply)
   const edgeGrad = ctx.createRadialGradient(
-    w / 2, h / 2, Math.min(w, h) * 0.35,
-    w / 2, h / 2, Math.max(w, h) * 0.6
+    w / 2, h / 2, Math.min(w, h) * 0.4,
+    w / 2, h / 2, Math.max(w, h) * 0.68
   );
   edgeGrad.addColorStop(0, "rgba(0,0,0,0)");
-  edgeGrad.addColorStop(1, "rgba(0,0,0,1)");
+  edgeGrad.addColorStop(1, "rgba(0,0,0,0.92)");
   ctx.globalCompositeOperation = "destination-out";
   ctx.fillStyle = edgeGrad;
   ctx.fillRect(0, 0, w, h);

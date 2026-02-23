@@ -220,8 +220,8 @@ export function RunCounter({
               aria-label="Previous run"
             >
               <svg
-                width="14" height="14" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"
+                width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                 className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200 flex-none"
               >
                 <polyline points="15 18 9 12 15 6" />
