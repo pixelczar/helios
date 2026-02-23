@@ -28,7 +28,13 @@ function springLerp(current: number, target: number, velocity: number, stiffness
   return { value: newValue, velocity: newVelocity };
 }
 
-export function ScrollIndicator() {
+export function ScrollIndicator({
+  viewMode = "timeline",
+  onViewModeChange,
+}: {
+  viewMode?: "timeline" | "today";
+  onViewModeChange?: (mode: "timeline" | "today") => void;
+} = {}) {
   const currentIndex = useActivityStore((s) => s.currentIndex);
   const activities = useActivityStore((s) => s.activities);
   const yearlyTarget = useGoalStore((s) => s.yearlyTarget);
@@ -345,6 +351,7 @@ export function ScrollIndicator() {
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
+      if (viewMode === "today") return;
       e.preventDefault();
       e.stopPropagation();
       isDragging.current = true;
@@ -352,7 +359,7 @@ export function ScrollIndicator() {
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       scrollToProgress(e.clientY);
     },
-    [scrollToProgress]
+    [scrollToProgress, viewMode]
   );
 
   const handlePointerMove = useCallback(
@@ -393,9 +400,23 @@ export function ScrollIndicator() {
       {/* <div className="absolute left-1/2 -translate-x-1/2 -top-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
         Day 1
       </div> */}
-      <div className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
+      <button
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onViewModeChange?.(viewMode === "today" ? "timeline" : "today");
+        }}
+        className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-[9px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-300 cursor-pointer ${
+          viewMode === "today"
+            ? "text-neutral-200"
+            : "text-neutral-600 hover:text-neutral-400"
+        }`}
+      >
         Today
-      </div>
+        {viewMode === "today" && (
+          <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-1 h-1 rounded-full bg-neutral-200" />
+        )}
+      </button>
 
       {/* Base track — subtle, barely-there line */}
       <div className="absolute left-1/2 -translate-x-1/2 w-[1.5px] h-full bg-white/4 rounded-full" />

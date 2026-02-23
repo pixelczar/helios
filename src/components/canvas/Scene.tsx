@@ -1,7 +1,8 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
-import { ScrollControls, MapControls } from "@react-three/drei";
+import { ScrollControls } from "@react-three/drei";
+import { CameraPan } from "./CameraPan";
 import { Suspense } from "react";
 import { RunTimeline } from "./RunTimeline";
 import { PostProcessing } from "./PostProcessing";
@@ -48,12 +49,7 @@ export function Scene({ activityCount }: SceneProps) {
             <RunTimeline />
           </ScrollControls>
         )}
-        <MapControls
-          enableRotate={false}
-          enableZoom={false}
-          enablePan={true}
-          screenSpacePanning={true}
-        />
+        <CameraPan />
         <PostProcessing />
       </Suspense>
     </Canvas>

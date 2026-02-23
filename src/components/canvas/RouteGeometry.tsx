@@ -97,11 +97,9 @@ export function RouteGeometry({
   // alphaMap texture issues with TubeGeometry's circumferential UV wrap.
   const endCol = colorEnd ?? color;
   const alphaStops: [number, number][] = [
-    [0, 1],
-    [controls.gradHoldEnd, 1],
-    [controls.gradMidPoint, controls.gradMidAlpha],
-    [controls.gradTailPoint, controls.gradTailAlpha],
-    [1, 0],
+    [0, 0],
+    [controls.gradPeakPoint, 1],
+    [1, controls.gradEndAlpha],
   ];
   const applyVertexGradient = (geo: THREE.TubeGeometry) => {
     const uvs = geo.attributes.uv;
@@ -133,7 +131,7 @@ export function RouteGeometry({
     applyVertexGradient(geo);
     return geo;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curve, segmentCount, controls.glowWidth, color, colorEnd, controls.gradHoldEnd, controls.gradMidPoint, controls.gradMidAlpha, controls.gradTailPoint, controls.gradTailAlpha]);
+  }, [curve, segmentCount, controls.glowWidth, color, colorEnd, controls.gradPeakPoint, controls.gradEndAlpha]);
 
   const coreGeo = useMemo(() => {
     if (!curve || !segmentCount) return null;
@@ -141,7 +139,7 @@ export function RouteGeometry({
     applyVertexGradient(geo);
     return geo;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curve, segmentCount, controls.coreWidth, color, colorEnd, controls.gradHoldEnd, controls.gradMidPoint, controls.gradMidAlpha, controls.gradTailPoint, controls.gradTailAlpha]);
+  }, [curve, segmentCount, controls.coreWidth, color, colorEnd, controls.gradPeakPoint, controls.gradEndAlpha]);
 
   const tracerGeo = useMemo(() => {
     if (!curve || !segmentCount) return null;
@@ -149,7 +147,7 @@ export function RouteGeometry({
     applyVertexGradient(geo);
     return geo;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curve, segmentCount, controls.tracerWidth, color, colorEnd, controls.gradHoldEnd, controls.gradMidPoint, controls.gradMidAlpha, controls.gradTailPoint, controls.gradTailAlpha]);
+  }, [curve, segmentCount, controls.tracerWidth, color, colorEnd, controls.gradPeakPoint, controls.gradEndAlpha]);
 
   // Single-color derivatives — used only for the start cap
   const coreColor = useMemo(

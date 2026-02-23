@@ -36,11 +36,8 @@ export function useRouteControls() {
 
   const gradient = useControls("Route", {
     Gradient: folder({
-      gradHoldEnd: { value: D.gradHoldEnd, min: 0, max: 0.8, step: 0.01, label: "Hold End" },
-      gradMidPoint: { value: D.gradMidPoint, min: 0.2, max: 0.9, step: 0.01, label: "Mid Point" },
-      gradMidAlpha: { value: D.gradMidAlpha, min: 0, max: 1, step: 0.01, label: "Mid Alpha" },
-      gradTailPoint: { value: D.gradTailPoint, min: 0.5, max: 0.98, step: 0.01, label: "Tail Point" },
-      gradTailAlpha: { value: D.gradTailAlpha, min: 0, max: 0.5, step: 0.01, label: "Tail Alpha" },
+      gradPeakPoint: { value: D.gradPeakPoint, min: 0.1, max: 0.9, step: 0.01, label: "Peak Point" },
+      gradEndAlpha: { value: D.gradEndAlpha, min: 0, max: 0.2, step: 0.01, label: "End Alpha" },
     }),
   });
 
@@ -103,11 +100,8 @@ function generateDefaults(v: ReturnType<typeof useRouteControls>): string {
   tracerDashRatio: ${n(v.tracerDashRatio)},
 
   // Gradient
-  gradHoldEnd: ${n(v.gradHoldEnd)},
-  gradMidPoint: ${n(v.gradMidPoint)},
-  gradMidAlpha: ${n(v.gradMidAlpha)},
-  gradTailPoint: ${n(v.gradTailPoint)},
-  gradTailAlpha: ${n(v.gradTailAlpha)},
+  gradPeakPoint: ${n(v.gradPeakPoint)},
+  gradEndAlpha: ${n(v.gradEndAlpha)},
 
   // Start Cap
   capEnabled: ${v.capEnabled},

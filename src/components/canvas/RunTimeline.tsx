@@ -109,12 +109,34 @@ export function RunTimeline() {
     };
   }, [scroll.el, activities.length]);
 
-  useFrame(() => {
+  // Spring state for Z-axis (gives scroll transitions a subtle bounce/settle)
+  const zSpring = useRef({ value: 0, velocity: 0, initialized: false });
+
+  useFrame((_, delta) => {
     if (!groupRef.current || activities.length === 0) return;
 
     const totalDepth = (activities.length - 1) * RUN_SPACING;
-    groupRef.current.position.z = scroll.offset * totalDepth;
+    const targetZ = scroll.offset * totalDepth;
+    const sp = zSpring.current;
 
+    // First frame: snap to target so there's no initial flyover
+    if (!sp.initialized) {
+      sp.value = targetZ;
+      sp.initialized = true;
+    }
+
+    // Damped spring: stiff enough to track fast scrolling, underdamped
+    // enough to bounce subtly when snapping between activities
+    const dt = Math.min(delta, 0.04);
+    const stiffness = 300;
+    const damping = 26;
+    const force = stiffness * (targetZ - sp.value) - damping * sp.velocity;
+    sp.velocity += force * dt;
+    sp.value += sp.velocity * dt;
+
+    groupRef.current.position.z = sp.value;
+
+    // Use raw offset (not spring) for index/progress so HUD stays responsive
     const rawIndex = scroll.offset * (activities.length - 1);
     const index = Math.round(rawIndex);
     const progress = rawIndex - Math.floor(rawIndex);

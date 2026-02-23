@@ -11,6 +11,7 @@ import { MapOverlay } from "./MapOverlay";
 import { getRouteColor } from "@/lib/colors";
 import { useActivityStore } from "@/stores/activityStore";
 import { useSettingsStore } from "@/stores/settingsStore";
+import { wasPanDrag } from "./CameraPan";
 
 interface RunCardProps {
   activity: StravaActivity;
@@ -88,6 +89,7 @@ export function RunCard({
   });
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
+    if (wasPanDrag()) return;
     e.stopPropagation();
     onSelect();
   };

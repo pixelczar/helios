@@ -8,10 +8,31 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://helios.run";
+
 export const metadata: Metadata = {
-  title: "Helios",
-  description: "Your runs, visualized in 3D",
-  icons: { icon: "/icon-512.png" },
+  title: {
+    default: "Helios",
+    template: "%s | Helios",
+  },
+  description: "Your running journey, visualized",
+  metadataBase: new URL(siteUrl),
+  icons: {
+    icon: "/icon-512.png",
+    apple: "/icon-512.png",
+  },
+  openGraph: {
+    title: "Helios",
+    description: "Your running journey, visualized",
+    siteName: "Helios",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Helios",
+    description: "Your running journey, visualized",
+  },
 };
 
 export const viewport: Viewport = {
