@@ -53,7 +53,7 @@ export default function AppPage() {
 
       {doneWithNoData && <EmptyState error={error} />}
 
-      <Scene activityCount={activities.length} />
+      <Scene activityCount={activities.length} isLoading={isLoading && activities.length === 0} />
 
       {/* Today summary — driven by scroll position */}
       <AnimatePresence>

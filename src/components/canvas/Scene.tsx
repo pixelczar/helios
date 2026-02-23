@@ -12,9 +12,10 @@ import { useIsMobile } from "@/hooks/useMediaQuery";
 
 interface SceneProps {
   activityCount: number;
+  isLoading?: boolean;
 }
 
-export function Scene({ activityCount }: SceneProps) {
+export function Scene({ activityCount, isLoading = false }: SceneProps) {
   const { theme } = useTheme();
   const bgColor = theme === "dark" ? "#000000" : "#f5f5f5";
   const isMobile = useIsMobile();
@@ -23,6 +24,7 @@ export function Scene({ activityCount }: SceneProps) {
 
   return (
     <Canvas
+      frameloop={isLoading ? "demand" : "always"}
       gl={{
         antialias: !isMobile,
         alpha: false,

@@ -67,8 +67,8 @@ export function LoadingScreen({ show }: { show: boolean }) {
       {show && (
         <motion.div
           initial={{ opacity: 1 }}
-          exit={reducedMotion ? { opacity: 0 } : { opacity: 0, filter: "blur(8px)" }}
-          transition={{ duration: reducedMotion ? 0 : 0.8, ease: [0.25, 0.1, 0.25, 1] }}
+          exit={reducedMotion ? { opacity: 0 } : { opacity: 0, filter: "blur(4px)" }}
+          transition={{ duration: reducedMotion ? 0 : 0.6, ease: [0.25, 0.1, 0.25, 1] }}
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#000000]"
         >
           <motion.div

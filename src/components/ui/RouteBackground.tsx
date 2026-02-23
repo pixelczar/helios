@@ -50,13 +50,17 @@ function AnimatedRoute({
   reducedMotion: boolean;
 }) {
   const pathRef = useRef<SVGPathElement>(null);
+  const totalLengthRef = useRef<number | null>(null);
 
   const animate = useCallback(
     (time: number) => {
       const el = pathRef.current;
       if (!el) return;
 
-      const totalLength = el.getTotalLength();
+      if (totalLengthRef.current === null) {
+        totalLengthRef.current = el.getTotalLength();
+      }
+      const totalLength = totalLengthRef.current;
 
       if (reducedMotion) {
         el.style.strokeDasharray = `${totalLength}`;
@@ -150,7 +154,7 @@ export function RouteBackground() {
       {/* Ambient layer — medium blur creates color wash */}
       <div
         className="absolute inset-0"
-        style={{ filter: "blur(16px)", opacity: 0.7, willChange: "filter" }}
+        style={{ filter: "blur(16px)", opacity: 0.7 }}
       >
         <svg
           viewBox="0 0 800 800"
@@ -176,7 +180,7 @@ export function RouteBackground() {
       {/* Detail layer — lighter blur shows route shape */}
       <div
         className="absolute inset-0"
-        style={{ filter: "blur(12px)", opacity: 0.3, willChange: "filter" }}
+        style={{ filter: "blur(12px)", opacity: 0.3 }}
       >
         <svg
           viewBox="0 0 800 800"
