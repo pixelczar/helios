@@ -31,6 +31,7 @@ const EASE_OUT = [0.25, 0.1, 0.25, 1] as const;
 // Gentle spring — smooth with a subtle bounce at the end
 const SPRING = { type: "spring", stiffness: 400, damping: 30 } as const;
 const SPRING_SOFT = { type: "spring", stiffness: 300, damping: 26 } as const;
+const SPRING_PILL = { type: "spring", stiffness: 260, damping: 26, mass: 0.9 } as const;
 
 const pillItemVariants = {
   hidden: { opacity: 0, y: 6 },
@@ -71,8 +72,11 @@ export function RunCounter({
   const { currentIndex, totalRuns, currentActivity } = useScrollIndex();
   const [expanded, setExpanded] = useState(false);
   const [visible, setVisible] = useState(true);
+  const hovering = useRef(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout>>(null);
   const reducedMotion = useReducedMotion();
+  const prevIndexRef = useRef(currentIndex);
+  const slideDirection = useRef<1 | -1>(1);
   const goals = useGoalStore((s) => s.goals);
   const activities = useActivityStore((s) => s.activities);
   const hiddenGoalIds = useSettingsStore((s) => s.hiddenGoalIds);
@@ -80,8 +84,19 @@ export function RunCounter({
   const resetHideTimer = useCallback(() => {
     setVisible(true);
     if (hideTimer.current) clearTimeout(hideTimer.current);
-    hideTimer.current = setTimeout(() => setVisible(false), 3500);
+    if (!hovering.current) {
+      hideTimer.current = setTimeout(() => setVisible(false), 3500);
+    }
   }, []);
+
+  // Track scroll direction for number slide animation
+  useEffect(() => {
+    if (currentIndex !== prevIndexRef.current) {
+      // displayed = totalRuns - currentIndex, so when currentIndex decreases the number grows → slide up
+      slideDirection.current = currentIndex < prevIndexRef.current ? 1 : -1;
+      prevIndexRef.current = currentIndex;
+    }
+  }, [currentIndex]);
 
   // Show on scroll, auto-hide after 2s of no change
   useEffect(() => {
@@ -165,22 +180,22 @@ export function RunCounter({
       animate={shouldShow ? "visible" : "hidden"}
       variants={{
         hidden: {
-          opacity: 0, y: 8, pointerEvents: "none" as const,
-          transition: reducedMotion ? { duration: 0 } : { duration: 0.35, ease: EASE_OUT },
+          opacity: 0, y: 14, scale: 0.95, filter: "blur(6px)", pointerEvents: "none" as const,
+          transition: reducedMotion ? { duration: 0 } : { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
         },
         visible: {
-          opacity: 1, y: 0, pointerEvents: "auto" as const,
-          transition: reducedMotion ? { duration: 0 } : { ...SPRING_SOFT, opacity: { duration: 0.25 } },
+          opacity: 1, y: 0, scale: 1, filter: "blur(0px)", pointerEvents: "auto" as const,
+          transition: reducedMotion ? { duration: 0 } : { ...SPRING_SOFT, opacity: { duration: 0.3 }, filter: { duration: 0.3 } },
         },
       }}
-      onHoverStart={() => { setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
-      onHoverEnd={() => { if (!expanded) hideTimer.current = setTimeout(() => setVisible(false), 2500); }}
+      onHoverStart={() => { hovering.current = true; setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
+      onHoverEnd={() => { hovering.current = false; if (!expanded) hideTimer.current = setTimeout(() => setVisible(false), 2500); }}
     >
       {/* Pill — layout animates width as chevrons mount/unmount */}
       <motion.div
         layout
-        transition={{ layout: reducedMotion ? { duration: 0 } : SPRING }}
-        className="bg-neutral-900/20 backdrop-blur-lg rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-500 hover:bg-neutral-900/80"
+        transition={{ layout: reducedMotion ? { duration: 0 } : SPRING_PILL }}
+        className="bg-neutral-900/20 backdrop-blur-md rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-500 hover:bg-neutral-900/80 overflow-hidden"
       >
         {/* Prev chevron — only when not at oldest */}
         <AnimatePresence initial={false}>
@@ -192,8 +207,9 @@ export function RunCounter({
               initial="initial"
               animate="animate"
               exit="exit"
+              whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
               onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
-              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden"
+              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
               aria-label="Previous run"
             >
               <svg
@@ -233,15 +249,20 @@ export function RunCounter({
               visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
             }}
           >
-            <motion.div variants={pillItemVariants} layout>
-              <AnimatePresence mode="wait">
+            <motion.div
+              variants={pillItemVariants}
+              layout
+              className="relative overflow-hidden"
+              style={{ height: "1.5rem" }}
+            >
+              <AnimatePresence mode="popLayout" initial={false}>
                 <motion.span
                   key={currentIndex}
-                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
+                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
                   animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                  exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
-                  transition={{ duration: reducedMotion ? 0 : 0.12 }}
-                  className="text-base font-bold text-neutral-200"
+                  exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
+                  transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
+                  className="text-base text-neutral-200 block"
                 >
                   {totalRuns - currentIndex}
                 </motion.span>
@@ -268,8 +289,9 @@ export function RunCounter({
               initial="initial"
               animate="animate"
               exit="exit"
+              whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
               onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
-              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden"
+              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
               aria-label="Next run"
             >
               <svg

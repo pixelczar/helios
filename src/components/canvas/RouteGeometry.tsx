@@ -172,21 +172,34 @@ export function RouteGeometry({
   );
 
   // Dash alpha texture for tracer — scrolled via offset.x each frame
+  // Uses a high-res texture with smooth gaussian falloff to avoid aliasing
   const tracerAlphaMap = useMemo(() => {
+    const W = 2048;
     const canvas = document.createElement("canvas");
-    canvas.width = 512;
+    canvas.width = W;
     canvas.height = 1;
     const ctx = canvas.getContext("2d")!;
     // Gap region (alpha = 0)
     ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, 512, 1);
-    // Visible dash region (alpha = 1) — at the start so the tracer begins at the route origin
-    const dashLen = Math.floor(512 * (1 - controls.tracerDashRatio));
-    ctx.fillStyle = "white";
-    ctx.fillRect(0, 0, dashLen, 1);
+    ctx.fillRect(0, 0, W, 1);
+    // Soft dash with gaussian-like falloff for smooth motion
+    const dashLen = Math.max(4, Math.round(W * (1 - controls.tracerDashRatio)));
+    const imgData = ctx.getImageData(0, 0, W, 1);
+    const data = imgData.data;
+    const center = dashLen / 2;
+    const sigma = dashLen / 3; // falloff width — ~3σ covers the full dash
+    for (let x = 0; x < dashLen; x++) {
+      const dist = (x - center) / sigma;
+      const alpha = Math.exp(-0.5 * dist * dist);
+      const idx = x * 4;
+      data[idx] = data[idx + 1] = data[idx + 2] = Math.round(alpha * 255);
+      data[idx + 3] = 255;
+    }
+    ctx.putImageData(imgData, 0, 0);
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = THREE.RepeatWrapping;
     tex.minFilter = THREE.LinearFilter;
+    tex.magFilter = THREE.LinearFilter;
     tex.generateMipmaps = false;
     tex.needsUpdate = true;
     return tex;

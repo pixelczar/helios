@@ -80,6 +80,7 @@ export function ScrollIndicator() {
 
   // Day positions for each activity (fractional 0-1 on the year timeline)
   const dayPositionsRef = useRef<number[]>([]);
+  const ratiosRef = useRef<number[]>([]);
 
   useEffect(() => {
     hoverTarget.current = hovered ? 1 : 0;
@@ -235,16 +236,18 @@ export function ScrollIndicator() {
           const cx = canvas.width / 2;
           ctx.clearRect(0, 0, canvas.width, h);
 
-          // Activity tick marks — small dots at each activity's day position
+          // Activity tick marks — dots at each activity's day position
           const curIdx = useActivityStore.getState().currentIndex;
+          const ratios = ratiosRef.current;
           for (let i = 0; i < positions.length; i++) {
             const y = positions[i] * h;
             const isCurrent = i === curIdx;
+            const color = ratios[i] !== undefined ? getRouteColorHex(ratios[i]) : "#ffffff";
+            const r = isCurrent ? 2.5 + t * 1 : 1.5 + t * 0.5;
+            const alphaHex = isCurrent ? "ff" : Math.round(0x55 + t * (0xcc - 0x55)).toString(16).padStart(2, "0");
             ctx.beginPath();
-            ctx.arc(cx, y, isCurrent ? 1.5 : 1, 0, Math.PI * 2);
-            ctx.fillStyle = isCurrent
-              ? "rgba(255, 255, 255, 0.5)"
-              : "rgba(255, 255, 255, 0.12)";
+            ctx.arc(cx, y, r, 0, Math.PI * 2);
+            ctx.fillStyle = `${color}${alphaHex}`;
             ctx.fill();
           }
 
@@ -285,6 +288,7 @@ export function ScrollIndicator() {
     dayPositionsRef.current = data.map((d) =>
       Math.max(0, Math.min(1, d.dayOfYear / todayDayOfYear))
     );
+    ratiosRef.current = data.map((d) => d.ratio);
     // Enforce monotonicity so the tracer never reverses direction.
     // Activities arrive reverse-chronologically from Strava, but backdated
     // entries or same-day runs can break strict ordering.
@@ -386,9 +390,9 @@ export function ScrollIndicator() {
       }}
     >
       {/* Year boundary labels */}
-      <div className="absolute left-1/2 -translate-x-1/2 -top-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
+      {/* <div className="absolute left-1/2 -translate-x-1/2 -top-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
         Day 1
-      </div>
+      </div> */}
       <div className="absolute left-1/2 -translate-x-1/2 -bottom-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
         Today
       </div>

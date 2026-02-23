@@ -64,8 +64,8 @@ export function RunTimeline() {
         const rawIdx = offset * (activities.length - 1);
         const floor = Math.floor(rawIdx);
         const frac = rawIdx - floor;
-        // Snap at 35% instead of 50% — easier to advance to next item
-        const nearestIndex = frac >= 0.35 ? Math.min(floor + 1, activities.length - 1) : floor;
+        // Snap at 20% instead of 50% — very easy to advance to next item
+        const nearestIndex = frac >= 0.2 ? Math.min(floor + 1, activities.length - 1) : floor;
         const snapTarget = nearestIndex / (activities.length - 1);
         const distToSnap = Math.abs(offset - snapTarget);
 
