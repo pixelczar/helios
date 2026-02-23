@@ -89,6 +89,12 @@ export function TodaySummary() {
       (now.getTime() - startOfYear.getTime()) / 86400000
     );
 
+    const dateLabel = now.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+
     const { actual, expected, delta, ratio } = calculateYearlyPaceAtDate(
       activities,
       yearlyTarget,
@@ -102,6 +108,7 @@ export function TodaySummary() {
 
     return {
       dayOfYear,
+      dateLabel,
       totalMiles: actual,
       expectedMiles: expected,
       delta,
@@ -129,21 +136,21 @@ export function TodaySummary() {
       initial="initial"
       animate="animate"
       exit="exit"
-      className="fixed inset-0 z-[5] flex items-center justify-center"
+      className="fixed inset-0 z-5 flex items-center justify-center pointer-events-none"
     >
       {/* Map background layer */}
       <div className="absolute inset-0" aria-hidden="true">
         {mapUrl && (
           <motion.div
-            initial={reducedMotion ? { opacity: 0.12 } : { opacity: 0, scale: 1.05 }}
-            animate={reducedMotion ? { opacity: 0.12 } : { opacity: 0.12, scale: 1 }}
-            transition={{ duration: 2, ease: EASE }}
+            initial={reducedMotion ? { opacity: 0.25 } : { opacity: 0, scale: 1.02 }}
+            animate={reducedMotion ? { opacity: 0.25 } : { opacity: 0.25, scale: 1 }}
+            transition={{ duration: 1.5, ease: EASE }}
             className="absolute inset-0"
             style={{
               backgroundImage: `url(${mapUrl})`,
               backgroundSize: "cover",
               backgroundPosition: "center",
-              filter: "blur(1px) saturate(0.5)",
+              filter: "saturate(0.4)",
             }}
           />
         )}
@@ -152,56 +159,62 @@ export function TodaySummary() {
           className="absolute inset-0"
           style={{
             background:
-              "radial-gradient(ellipse at center, transparent 20%, black 75%)",
+              "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.5) 70%, black 95%)",
           }}
         />
       </div>
 
-      {/* Content */}
-      <div className="relative z-10 text-center px-4">
-        {/* "DAY" label */}
+      {/* Content — pushed above center */}
+      <div className="relative z-10 px-4 -mt-[12vh] flex flex-col items-center">
+        {/* Date */}
         <motion.p
           variants={itemVariants(0, reducedMotion)}
-          className="text-[12px] font-mono uppercase tracking-[0.2em] text-neutral-500 mb-4"
+          className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-500 mb-6"
         >
-          Day
+          {todayData.dateLabel}
         </motion.p>
 
-        {/* Day of year — hero number */}
-        <motion.p
-          variants={itemVariants(1, reducedMotion)}
-          className="text-6xl md:text-9xl font-black italic text-foreground tracking-tighter"
-        >
-          {todayData.dayOfYear}
-        </motion.p>
-
-        {/* Divider */}
+        {/* Hero metric lockup — two right-aligned columns with labels */}
         <motion.div
-          variants={itemVariants(2, reducedMotion)}
-          className="flex items-center justify-center my-3"
+          variants={itemVariants(1, reducedMotion)}
+          className="flex items-end gap-8 italic"
         >
-          <div className="w-8 h-px bg-neutral-800" />
+          {/* Day of year column */}
+          <div className="flex flex-col items-end gap-2">
+            <span className="text-6xl md:text-9xl font-black tracking-tighter text-neutral-400 leading-none">
+              {todayData.dayOfYear}
+            </span>
+            <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-600 mt-1 not-italic">
+              Days
+            </span>
+          </div>
+
+          {/* Separator */}
+          <span className="text-3xl md:text-5xl font-light text-neutral-700 mb-16">
+            /
+          </span>
+
+          {/* Total miles column */}
+          <div className="flex flex-col items-end gap-2">
+            <span
+              className="text-6xl md:text-9xl font-black tracking-tighter leading-none"
+              style={{
+                color: deltaColor,
+                textShadow: `0 0 40px ${deltaColor}20`,
+              }}
+            >
+              {todayData.totalMiles.toFixed(1)}
+            </span>
+            <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-600 mt-1 not-italic">
+              Total Miles
+            </span>
+          </div>
         </motion.div>
 
-        {/* Total yearly miles — hero number, colored */}
+        {/* Pace delta — centered, spaced below */}
         <motion.p
-          variants={itemVariants(3, reducedMotion)}
-          className="text-5xl md:text-8xl font-black italic tracking-tighter"
-          style={{
-            color: deltaColor,
-            textShadow: `0 0 40px ${deltaColor}20`,
-          }}
-        >
-          {todayData.totalMiles.toFixed(1)}
-          <span className="text-base text-neutral-500 ml-2 font-normal tracking-normal italic">
-            mi
-          </span>
-        </motion.p>
-
-        {/* Pace delta */}
-        <motion.p
-          variants={itemVariants(4, reducedMotion)}
-          className="text-base md:text-xl italic font-sans mt-4"
+          variants={itemVariants(2, reducedMotion)}
+          className="text-base md:text-lg italic font-sans mt-10 text-center"
           style={{ color: deltaColor }}
         >
           {todayData.isAhead ? "+" : ""}
@@ -212,8 +225,8 @@ export function TodaySummary() {
         {/* Goal rings */}
         {progresses.length > 0 && (
           <motion.div
-            variants={itemVariants(5, reducedMotion)}
-            className="flex items-center justify-center gap-5 mt-8"
+            variants={itemVariants(3, reducedMotion)}
+            className="flex items-center gap-5 mt-8"
           >
             {progresses.map((p) => (
               <TodayGoalRing key={p.goal.id} progress={p} />
@@ -224,8 +237,8 @@ export function TodaySummary() {
         {/* Today's run(s) */}
         {todayData.todaysRuns.length > 0 && (
           <motion.div
-            variants={itemVariants(6, reducedMotion)}
-            className="mt-10"
+            variants={itemVariants(4, reducedMotion)}
+            className="mt-10 text-center"
           >
             <p className="text-[11px] font-mono uppercase tracking-widest text-neutral-600 mb-2">
               Today
@@ -308,9 +321,7 @@ function TodayGoalRing({
       </span>
       <span className="text-[9px] font-mono uppercase tracking-widest text-neutral-600 mt-1">
         {label}
-        {unit && (
-          <span className="text-neutral-700 ml-0.5">{unit}</span>
-        )}
+        {unit && <span className="text-neutral-700 ml-0.5">{unit}</span>}
       </span>
     </div>
   );

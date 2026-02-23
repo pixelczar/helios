@@ -28,13 +28,7 @@ function springLerp(current: number, target: number, velocity: number, stiffness
   return { value: newValue, velocity: newVelocity };
 }
 
-export function ScrollIndicator({
-  viewMode = "timeline",
-  onViewModeChange,
-}: {
-  viewMode?: "timeline" | "today";
-  onViewModeChange?: (mode: "timeline" | "today") => void;
-} = {}) {
+export function ScrollIndicator() {
   const currentIndex = useActivityStore((s) => s.currentIndex);
   const activities = useActivityStore((s) => s.activities);
   const yearlyTarget = useGoalStore((s) => s.yearlyTarget);
@@ -132,17 +126,24 @@ export function ScrollIndicator({
       const scrollProgress = smoothProgress.current;
 
       // Map scroll progress (activity-linear) to day-based position on year timeline
+      // Scroll offset: 0 = activity 0, (N-1)/N = activity N-1, 1 = Today
       const positions = dayPositionsRef.current;
       const numAct = positions.length;
       let progress: number;
       if (numAct > 1) {
-        const rawIdx = scrollProgress * (numAct - 1);
-        const lo = Math.max(0, Math.min(Math.floor(rawIdx), numAct - 1));
-        const hi = Math.min(lo + 1, numAct - 1);
-        const frac = rawIdx - lo;
-        progress = lo === hi ? positions[lo] : positions[lo] + (positions[hi] - positions[lo]) * frac;
+        // rawIdx maps 0..N where N = Today
+        const rawIdx = scrollProgress * numAct;
+        if (rawIdx >= numAct) {
+          // At or past the Today slot — bottom of year timeline
+          progress = 1.0;
+        } else {
+          const lo = Math.max(0, Math.min(Math.floor(rawIdx), numAct - 1));
+          const hi = Math.min(lo + 1, numAct - 1);
+          const frac = rawIdx - lo;
+          progress = lo === hi ? positions[lo] : positions[lo] + (positions[hi] - positions[lo]) * frac;
+        }
       } else if (numAct === 1) {
-        progress = positions[0];
+        progress = scrollProgress >= 0.5 ? 1.0 : positions[0];
       } else {
         progress = scrollProgress;
       }
@@ -342,7 +343,7 @@ export function ScrollIndicator({
           closestIdx = i;
         }
       }
-      const scrollT = positions.length > 1 ? closestIdx / (positions.length - 1) : 0;
+      const scrollT = positions.length > 0 ? closestIdx / positions.length : 0;
       const scrollable = container.scrollHeight - container.clientHeight;
       container.scrollTop = scrollT * scrollable;
     },
@@ -351,7 +352,6 @@ export function ScrollIndicator({
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (viewMode === "today") return;
       e.preventDefault();
       e.stopPropagation();
       isDragging.current = true;
@@ -359,7 +359,7 @@ export function ScrollIndicator({
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
       scrollToProgress(e.clientY);
     },
-    [scrollToProgress, viewMode]
+    [scrollToProgress]
   );
 
   const handlePointerMove = useCallback(
@@ -404,16 +404,20 @@ export function ScrollIndicator({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
-          onViewModeChange?.(viewMode === "today" ? "timeline" : "today");
+          const container = findScrollContainer();
+          if (container) {
+            const scrollable = container.scrollHeight - container.clientHeight;
+            container.scrollTo({ top: scrollable, behavior: "smooth" });
+          }
         }}
         className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-[9px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-300 cursor-pointer ${
-          viewMode === "today"
+          currentIndex >= totalRuns
             ? "text-neutral-200"
             : "text-neutral-600 hover:text-neutral-400"
         }`}
       >
         Today
-        {viewMode === "today" && (
+        {currentIndex >= totalRuns && (
           <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-1 h-1 rounded-full bg-neutral-200" />
         )}
       </button>

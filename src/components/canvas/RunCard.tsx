@@ -18,6 +18,7 @@ interface RunCardProps {
   index: number;
   zPosition: number;
   totalRuns: number;
+  totalSlots: number;
   paceRatio: number;
   prevPaceRatio: number;
   isFocused: boolean;
@@ -29,6 +30,7 @@ export function RunCard({
   index,
   zPosition,
   totalRuns,
+  totalSlots,
   paceRatio,
   prevPaceRatio,
   isFocused,
@@ -40,8 +42,10 @@ export function RunCard({
   const showMapOverlay = useSettingsStore((s) => s.showMapOverlay);
   const decodedRoute = useActivityStore((s) => s.decodedRoutes.get(activity.id));
 
-  const scrollSegment = 1 / Math.max(totalRuns - 1, 1);
-  const scrollCenter = totalRuns <= 1 ? 0.5 : index / (totalRuns - 1);
+  // totalSlots = N (N activities, Today sits at offset 1 after all of them)
+  // Activity at index i has scrollCenter at i / totalSlots
+  const scrollSegment = 1 / Math.max(totalSlots, 1);
+  const scrollCenter = totalSlots <= 0 ? 0.5 : index / totalSlots;
 
   const color = useMemo(
     () => getRouteColor(paceRatio),

@@ -57,7 +57,7 @@ export default async function Image() {
           >
             Helios
           </div>
-          <div
+          {/* <div
             style={{
               fontSize: 28,
               fontWeight: 400,
@@ -66,7 +66,7 @@ export default async function Image() {
             }}
           >
             Your running journey, visualized
-          </div>
+          </div> */}
         </div>
       </div>
     ),

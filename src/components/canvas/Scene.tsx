@@ -18,7 +18,8 @@ export function Scene({ activityCount }: SceneProps) {
   const { theme } = useTheme();
   const bgColor = theme === "dark" ? "#000000" : "#f5f5f5";
   const isMobile = useIsMobile();
-  const pages = Math.max(activityCount, 2);
+  // +1 for the "Today" summary slot at offset 0
+  const pages = Math.max(activityCount + 1, 2);
 
   return (
     <Canvas

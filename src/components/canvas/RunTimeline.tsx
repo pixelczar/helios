@@ -29,26 +29,29 @@ export function RunTimeline() {
     [activities, yearlyTarget]
   );
 
+  // N activities + 1 Today slot at the end = N+1 items, N gaps between them
+  const totalSlots = activities.length;
+
   // Track whether a programmatic snap is in progress so we don't re-trigger
   const snapping = useRef(false);
 
   const scrollToIndex = useCallback(
     (index: number) => {
-      if (activities.length <= 1) return;
+      if (totalSlots <= 0) return;
       snapping.current = true;
-      const target = index / (activities.length - 1);
+      // index 0..N-1 = activities, index N = Today (at offset 1)
+      const target = index / totalSlots;
       const scrollable = scroll.el.scrollHeight - scroll.el.clientHeight;
       scroll.el.scrollTo({ top: target * scrollable, behavior: "smooth" });
     },
-    [activities.length, scroll]
+    [totalSlots, scroll]
   );
 
   // Light scroll snapping — after the user stops scrolling, gently settle
-  // onto the nearest item. Uses a debounce so it only kicks in once momentum
-  // has died, and `behavior: "smooth"` keeps the landing buttery.
+  // onto the nearest item.
   useEffect(() => {
     const el = scroll.el;
-    if (!el || activities.length <= 1) return;
+    if (!el || totalSlots <= 0) return;
 
     let debounceId: number = 0;
     let snapClearId: number = 0;
@@ -61,32 +64,32 @@ export function RunTimeline() {
         if (scrollable <= 0) return;
 
         const offset = el.scrollTop / scrollable;
-        const rawIdx = offset * (activities.length - 1);
+        // rawIdx: 0 = newest, N-1 = oldest, N = Today
+        const rawIdx = offset * totalSlots;
         const floor = Math.floor(rawIdx);
         const frac = rawIdx - floor;
-        // Snap at 20% instead of 50% — very easy to advance to next item
-        const nearestIndex = frac >= 0.2 ? Math.min(floor + 1, activities.length - 1) : floor;
-        const snapTarget = nearestIndex / (activities.length - 1);
+        // Snap at 20% — very easy to advance to next item
+        const nearestIndex = frac >= 0.2
+          ? Math.min(floor + 1, totalSlots)
+          : Math.max(floor, 0);
+        const snapTarget = nearestIndex / totalSlots;
         const distToSnap = Math.abs(offset - snapTarget);
 
         // Only snap if we're not already sitting on the target
         if (distToSnap > 0.003) {
           snapping.current = true;
           el.scrollTo({ top: snapTarget * scrollable, behavior: "smooth" });
-          // Safety fallback — clear the flag even if scrollend doesn't fire
           clearTimeout(snapClearId);
           snapClearId = window.setTimeout(() => { snapping.current = false; }, 800);
         }
       }, 120);
     };
 
-    // Clear snap lock when the smooth-scroll animation finishes
     const handleScrollEnd = () => {
       clearTimeout(snapClearId);
       snapping.current = false;
     };
 
-    // Cancel snap immediately if the user scrolls again
     const handleUserInput = () => {
       if (snapping.current) {
         snapping.current = false;
@@ -107,26 +110,23 @@ export function RunTimeline() {
       clearTimeout(debounceId);
       clearTimeout(snapClearId);
     };
-  }, [scroll.el, activities.length]);
+  }, [scroll.el, totalSlots, activities.length]);
 
-  // Spring state for Z-axis (gives scroll transitions a subtle bounce/settle)
+  // Spring state for Z-axis
   const zSpring = useRef({ value: 0, velocity: 0, initialized: false });
 
   useFrame((_, delta) => {
     if (!groupRef.current || activities.length === 0) return;
 
-    const totalDepth = (activities.length - 1) * RUN_SPACING;
+    const totalDepth = totalSlots * RUN_SPACING;
     const targetZ = scroll.offset * totalDepth;
     const sp = zSpring.current;
 
-    // First frame: snap to target so there's no initial flyover
     if (!sp.initialized) {
       sp.value = targetZ;
       sp.initialized = true;
     }
 
-    // Damped spring: stiff enough to track fast scrolling, underdamped
-    // enough to bounce subtly when snapping between activities
     const dt = Math.min(delta, 0.04);
     const stiffness = 300;
     const damping = 26;
@@ -136,9 +136,9 @@ export function RunTimeline() {
 
     groupRef.current.position.z = sp.value;
 
-    // Use raw offset (not spring) for index/progress so HUD stays responsive
-    const rawIndex = scroll.offset * (activities.length - 1);
-    const index = Math.round(rawIndex);
+    // rawIndex: 0 = newest, N-1 = oldest, N = Today
+    const rawIndex = scroll.offset * totalSlots;
+    const index = Math.min(activities.length, Math.round(rawIndex));
     const progress = rawIndex - Math.floor(rawIndex);
     setScrollState(index, progress);
   });
@@ -152,6 +152,7 @@ export function RunTimeline() {
           index={index}
           zPosition={-index * RUN_SPACING}
           totalRuns={activities.length}
+          totalSlots={totalSlots}
           paceRatio={paceRatios[index]}
           prevPaceRatio={index > 0 ? paceRatios[index - 1] : paceRatios[index]}
           isFocused={index === currentIndex}

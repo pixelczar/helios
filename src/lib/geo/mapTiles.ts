@@ -10,7 +10,7 @@ const TILE_URL = "https://basemaps.cartocdn.com/dark_nolabels";
 
 // LRU cache — keyed by activityId
 const cache = new Map<number, { canvas: HTMLCanvasElement; coverage: TileCoverage }>();
-const CACHE_LIMIT = 10;
+const CACHE_LIMIT = 200;
 
 function evictOldest() {
   if (cache.size >= CACHE_LIMIT) {
@@ -19,14 +19,38 @@ function evictOldest() {
   }
 }
 
+// In-flight dedup — if a fetch is already in progress for an activity, reuse it
+const inflight = new Map<number, Promise<{ canvas: HTMLCanvasElement; coverage: TileCoverage } | null>>();
+
+// Tile fetch concurrency limiter — avoid overwhelming the browser/CDN
+const MAX_CONCURRENT_TILES = 12;
+let activeTileFetches = 0;
+const tileQueue: (() => void)[] = [];
+
 function fetchTileImage(z: number, x: number, y: number): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = `${TILE_URL}/${z}/${x}/${y}@2x.png`;
+    const doFetch = () => {
+      activeTileFetches++;
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => { activeTileFetches--; drainTileQueue(); resolve(img); };
+      img.onerror = () => { activeTileFetches--; drainTileQueue(); reject(new Error("tile load failed")); };
+      img.src = `${TILE_URL}/${z}/${x}/${y}@2x.png`;
+    };
+
+    if (activeTileFetches < MAX_CONCURRENT_TILES) {
+      doFetch();
+    } else {
+      tileQueue.push(doFetch);
+    }
   });
+}
+
+function drainTileQueue() {
+  while (tileQueue.length > 0 && activeTileFetches < MAX_CONCURRENT_TILES) {
+    const next = tileQueue.shift();
+    if (next) next();
+  }
 }
 
 export async function fetchMapImage(
@@ -37,6 +61,20 @@ export async function fetchMapImage(
   const cached = cache.get(activityId);
   if (cached) return cached;
 
+  // Deduplicate concurrent requests for the same activity
+  const existing = inflight.get(activityId);
+  if (existing) return existing;
+
+  const promise = _fetchMapImageInner(activityId, rawPoints);
+  inflight.set(activityId, promise);
+  promise.finally(() => inflight.delete(activityId));
+  return promise;
+}
+
+async function _fetchMapImageInner(
+  activityId: number,
+  rawPoints: [number, number][]
+): Promise<{ canvas: HTMLCanvasElement; coverage: TileCoverage } | null> {
   if (rawPoints.length < 2) return null;
 
   // Compute bounding box with 15% padding

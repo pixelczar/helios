@@ -92,8 +92,8 @@ export function RunCounter({
   // Track scroll direction for number slide animation
   useEffect(() => {
     if (currentIndex !== prevIndexRef.current) {
-      // displayed = totalRuns - currentIndex, so when currentIndex decreases the number grows → slide up
-      slideDirection.current = currentIndex < prevIndexRef.current ? 1 : -1;
+      // displayed = currentIndex + 1, so when currentIndex increases the number grows → slide up
+      slideDirection.current = currentIndex > prevIndexRef.current ? 1 : -1;
       prevIndexRef.current = currentIndex;
     }
   }, [currentIndex]);
@@ -125,11 +125,11 @@ export function RunCounter({
     }
   }, [expanded]);
 
-  // Programmatic scroll to a specific activity index
+  // Programmatic scroll to a specific activity index (activities.length = Today)
   const scrollToIndex = useCallback(
     (index: number) => {
-      if (activities.length <= 1) return;
-      const clamped = Math.max(0, Math.min(index, activities.length - 1));
+      if (activities.length === 0) return;
+      const clamped = Math.max(0, Math.min(index, activities.length));
       // Find the scroll container (same approach as ScrollIndicator)
       const candidates = document.querySelectorAll("div");
       let container: HTMLElement | null = null;
@@ -145,7 +145,8 @@ export function RunCounter({
         }
       }
       if (!container) return;
-      const target = clamped / (activities.length - 1);
+      // offset = index / N where N = activities.length (Today at N/N = 1)
+      const target = clamped / activities.length;
       const scrollable = container.scrollHeight - container.clientHeight;
       container.scrollTo({ top: target * scrollable, behavior: "smooth" });
     },
@@ -153,8 +154,9 @@ export function RunCounter({
   );
 
   const shouldShow = visible || expanded;
-  const hasPrev = currentIndex < totalRuns - 1;
-  const hasNext = currentIndex > 0;
+  const isAtToday = currentIndex >= totalRuns;
+  const hasPrev = currentIndex > 0; // can go to a newer run (lower index)
+  const hasNext = currentIndex < totalRuns; // can go toward Today (higher index)
 
   const asOfDate = useMemo(() => {
     if (currentActivity) return new Date(currentActivity.start_date_local);
@@ -208,7 +210,7 @@ export function RunCounter({
               animate="animate"
               exit="exit"
               whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
-              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
+              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
               className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
               aria-label="Previous run"
             >
@@ -240,43 +242,45 @@ export function RunCounter({
             </motion.div>
           ))}
 
-          {/* Run counter */}
-          <motion.div
-            layout
-            className="flex items-baseline gap-2 font-sans tabular-nums"
-            variants={{
-              hidden: {},
-              visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
-            }}
-          >
+          {/* Run counter — hidden when at Today */}
+          {!isAtToday && (
             <motion.div
-              variants={pillItemVariants}
               layout
-              className="relative overflow-hidden"
-              style={{ height: "1.5rem" }}
+              className="flex items-baseline gap-2 font-sans tabular-nums"
+              variants={{
+                hidden: {},
+                visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
+              }}
             >
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                  key={currentIndex}
-                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
-                  animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                  exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
-                  transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
-                  className="text-base text-neutral-200 block"
-                >
-                  {totalRuns - currentIndex}
-                </motion.span>
-              </AnimatePresence>
+              <motion.div
+                variants={pillItemVariants}
+                layout
+                className="relative overflow-hidden"
+                style={{ height: "1.5rem" }}
+              >
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.span
+                    key={currentIndex}
+                    initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
+                    animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                    exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
+                    transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
+                    className="text-base text-neutral-200 block"
+                  >
+                    {currentIndex + 1}
+                  </motion.span>
+                </AnimatePresence>
+              </motion.div>
+              <motion.span
+                className="text-base text-neutral-500 font-bold flex items-baseline gap-2"
+                variants={pillItemVariants}
+                layout
+              >
+                <span className="text-sm font-light opacity-50">/</span>
+                <span className="font-light">{totalRuns}</span>
+              </motion.span>
             </motion.div>
-            <motion.span
-              className="text-base text-neutral-500 font-bold flex items-baseline gap-2"
-              variants={pillItemVariants}
-              layout
-            >
-              <span className="text-sm font-light opacity-50">/</span>
-              <span className="font-light">{totalRuns}</span>
-            </motion.span>
-          </motion.div>
+          )}
         </motion.button>
 
         {/* Next chevron — only when not at newest */}
@@ -290,7 +294,7 @@ export function RunCounter({
               animate="animate"
               exit="exit"
               whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
-              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
+              onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
               className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
               aria-label="Next run"
             >

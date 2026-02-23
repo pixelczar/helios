@@ -15,7 +15,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Leva } from "leva";
 import { useState, useEffect } from "react";
 
-export type ViewMode = "timeline" | "today";
+const EASE = [0.25, 0.1, 0.25, 1] as const;
 
 const Scene = dynamic(
   () => import("@/components/canvas/Scene").then((m) => m.Scene),
@@ -26,9 +26,10 @@ export default function AppPage() {
   const { activities, isLoading, error } = useActivities();
   const timeRange = useActivityStore((s) => s.timeRange) as TimeRange;
   const fetchAllForRange = useActivityStore((s) => s.fetchAllForRange);
+  const currentIndex = useActivityStore((s) => s.currentIndex);
   const [debugVisible, setDebugVisible] = useState(false);
-  const [viewMode, setViewMode] = useState<ViewMode>("timeline");
   const doneWithNoData = !isLoading && activities.length === 0;
+  const isAtToday = currentIndex >= activities.length;
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -52,26 +53,17 @@ export default function AppPage() {
 
       {doneWithNoData && <EmptyState error={error} />}
 
-      {/* Scene — stays mounted, fades out in today mode */}
-      <div
-        className="transition-opacity duration-500"
-        style={{
-          opacity: viewMode === "timeline" ? 1 : 0,
-          pointerEvents: viewMode === "timeline" ? "auto" : "none",
-        }}
-      >
-        <Scene activityCount={activities.length} />
-      </div>
+      <Scene activityCount={activities.length} />
 
-      {/* Today summary */}
+      {/* Today summary — driven by scroll position */}
       <AnimatePresence>
-        {viewMode === "today" && activities.length > 0 && (
+        {isAtToday && activities.length > 0 && (
           <motion.div
             key="today"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
+            transition={{ duration: 0.35, ease: EASE }}
           >
             <TodaySummary />
           </motion.div>
@@ -80,16 +72,20 @@ export default function AppPage() {
 
       {activities.length > 0 && (
         <HUD>
-          {/* RunStats — only in timeline mode */}
+          {/* RunStats — hidden when at Today (currentActivity will be null) */}
           <AnimatePresence>
-            {viewMode === "timeline" && (
+            {!isAtToday && (
               <motion.div
                 key="run-stats"
-                initial={{ opacity: 1 }}
+                className="absolute inset-0"
+                initial={{ opacity: 0, filter: "blur(4px)" }}
+                animate={{ opacity: 1, filter: "blur(0px)" }}
                 exit={{
                   opacity: 0,
-                  transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] },
+                  filter: "blur(4px)",
+                  transition: { duration: 0.3, ease: EASE },
                 }}
+                transition={{ duration: 0.4, ease: EASE }}
               >
                 <RunStats />
               </motion.div>
@@ -100,10 +96,7 @@ export default function AppPage() {
             timeRange={timeRange}
             onTimeRangeChange={handleTimeRangeChange}
           />
-          <ScrollIndicator
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-          />
+          <ScrollIndicator />
         </HUD>
       )}
     </>

@@ -48,12 +48,12 @@ export function LandingPage() {
             Helios
           </motion.h1>
 
-          <motion.p
+          {/* <motion.p
             variants={itemVariants(1, reducedMotion)}
             className="text-sm font-light text-neutral-500 tracking-wide"
           >
             Your running journey, visualized
-          </motion.p>
+          </motion.p> */}
         </div>
 
         <motion.a

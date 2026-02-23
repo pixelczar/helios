@@ -2,24 +2,16 @@
 
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 
-/* A route-like SVG path that slowly rotates */
+/* A closed-loop route SVG path */
 const ROUTE_PATH =
-  "M 60 140 C 65 120, 80 95, 95 100 C 110 105, 100 130, 115 120 C 135 108, 130 75, 140 60 C 148 48, 155 65, 160 55 C 168 42, 162 28, 175 22 C 185 17, 178 38, 190 30";
+  "M 90 145 C 55 138, 32 112, 40 82 C 48 52, 78 35, 112 40 C 146 45, 168 72, 160 105 C 152 138, 120 152, 90 145 Z";
 
-function SpinningRoute({ reducedMotion }: { reducedMotion: boolean | null }) {
+function RouteLoop({ reducedMotion }: { reducedMotion: boolean | null }) {
   return (
-    <motion.div
-      animate={reducedMotion ? undefined : { rotate: 360 }}
-      transition={
-        reducedMotion
-          ? undefined
-          : { duration: 20, repeat: Infinity, ease: "linear" }
-      }
-    >
       <svg
         width="160"
         height="160"
-        viewBox="20 0 200 170"
+        viewBox="20 10 200 170"
         fill="none"
       >
         <defs>
@@ -62,29 +54,14 @@ function SpinningRoute({ reducedMotion }: { reducedMotion: boolean | null }) {
           }
         />
 
-        {/* Start dot */}
+        {/* Start/end dot at loop junction */}
         <motion.circle
-          cx="60"
-          cy="140"
+          cx="90"
+          cy="145"
           r="2.5"
           fill="rgba(255,136,68,0.3)"
-          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={
-            reducedMotion
-              ? { duration: 0 }
-              : { duration: 0.4, delay: 0.1 }
-          }
-        />
-
-        {/* End dot */}
-        <motion.circle
-          cx="190"
-          cy="30"
-          r="2.5"
-          fill="rgba(0,255,204,0.3)"
-          initial={reducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={reducedMotion ? { opacity: 1 } : { opacity: 0 }}
+          animate={{ opacity: 1 }}
           transition={
             reducedMotion
               ? { duration: 0 }
@@ -92,7 +69,6 @@ function SpinningRoute({ reducedMotion }: { reducedMotion: boolean | null }) {
           }
         />
       </svg>
-    </motion.div>
   );
 }
 
@@ -109,11 +85,11 @@ export function LoadingScreen({ show }: { show: boolean }) {
           className="fixed inset-0 z-50 flex items-center justify-center bg-[#000000]"
         >
           <motion.div
-            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, filter: "blur(4px)" }}
-            animate={reducedMotion ? { opacity: 1 } : { opacity: 1, scale: 1, filter: "blur(0px)" }}
+            initial={reducedMotion ? { opacity: 0 } : { opacity: 0, filter: "blur(4px)" }}
+            animate={reducedMotion ? { opacity: 1 } : { opacity: 1, filter: "blur(0px)" }}
             transition={{ duration: reducedMotion ? 0 : 0.5, delay: reducedMotion ? 0 : 0.1 }}
           >
-            <SpinningRoute reducedMotion={reducedMotion} />
+            <RouteLoop reducedMotion={reducedMotion} />
           </motion.div>
         </motion.div>
       )}
