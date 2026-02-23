@@ -14,7 +14,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set, get) => ({
-      showMapOverlay: false,
+      showMapOverlay: true,
       setShowMapOverlay: (show) => set({ showMapOverlay: show }),
       // Goals hidden from the HUD gauges — "default-weekly-runs" hidden by default
       hiddenGoalIds: ["default-weekly-runs"],

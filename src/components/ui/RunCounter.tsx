@@ -429,6 +429,11 @@ function SettingsContent({
   const setShowMapOverlay = useSettingsStore((s) => s.setShowMapOverlay);
   const hiddenGoalIds = useSettingsStore((s) => s.hiddenGoalIds);
   const toggleGoalVisibility = useSettingsStore((s) => s.toggleGoalVisibility);
+  const [isDemo, setIsDemo] = useState(false);
+
+  useEffect(() => {
+    setIsDemo(document.cookie.includes("demo_mode=true"));
+  }, []);
 
   return (
     <div className="px-4 pb-4 pt-4 w-[280px] space-y-4">
@@ -558,12 +563,12 @@ function SettingsContent({
       {/* Divider */}
       <div className="h-px bg-white/[0.04]" />
 
-      {/* Logout */}
+      {/* Logout / Exit demo */}
       <a
         href="/api/auth/logout"
         className="flex items-center gap-2 text-xs text-amber-500/70 hover:text-amber-400 transition-colors py-1"
       >
-        Disconnect Strava
+        {isDemo ? "Exit Demo Mode" : "Disconnect Strava"}
         <svg
           width="12" height="12" viewBox="0 0 24 24"
           fill="none" stroke="currentColor" strokeWidth="1.5"
