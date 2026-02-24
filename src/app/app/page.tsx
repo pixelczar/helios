@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useActivities } from "@/hooks/useActivities";
 import { useActivityStore } from "@/stores/activityStore";
+import { fetchMapImage } from "@/lib/geo/mapTiles";
 import { HUD } from "@/components/ui/HUD";
 import { RunStats } from "@/components/ui/RunStats";
 import { RunCounter } from "@/components/ui/RunCounter";
@@ -13,7 +14,7 @@ import { LoadingScreen } from "@/components/ui/LoadingScreen";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { AnimatePresence, motion } from "framer-motion";
 import { Leva } from "leva";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
@@ -28,8 +29,30 @@ export default function AppPage() {
   const fetchAllForRange = useActivityStore((s) => s.fetchAllForRange);
   const currentIndex = useActivityStore((s) => s.currentIndex);
   const [debugVisible, setDebugVisible] = useState(false);
-  const doneWithNoData = !isLoading && activities.length === 0;
+  const [warmupDone, setWarmupDone] = useState(false);
+  const warmupStarted = useRef(false);
+  const doneWithNoData = !isLoading && activities.length === 0 && warmupDone;
   const isAtToday = currentIndex >= activities.length;
+
+  // When the first activities arrive, kick off a warmup window:
+  // the 3D scene renders behind the loading screen for 400ms so shaders
+  // compile and geometries upload before the loading screen exits.
+  // Also prefetch map tiles for the first visible cards.
+  useEffect(() => {
+    if (activities.length > 0 && !warmupStarted.current) {
+      warmupStarted.current = true;
+      const { decodedRoutes } = useActivityStore.getState();
+      activities.slice(0, 10).forEach((activity) => {
+        const decoded = decodedRoutes.get(activity.id);
+        if (decoded?.points?.length) {
+          fetchMapImage(activity.id, decoded.points);
+        }
+      });
+      const t = window.setTimeout(() => setWarmupDone(true), 400);
+      return () => window.clearTimeout(t);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activities.length]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -49,11 +72,11 @@ export default function AppPage() {
   return (
     <>
       <Leva collapsed hidden={!debugVisible} />
-      <LoadingScreen show={isLoading && activities.length === 0} />
+      <LoadingScreen show={!warmupDone} />
 
       {doneWithNoData && <EmptyState error={error} />}
 
-      <Scene activityCount={activities.length} isLoading={isLoading && activities.length === 0} />
+      <Scene activityCount={activities.length} isLoading={activities.length === 0} />
 
       {/* Today summary — driven by scroll position */}
       <AnimatePresence>
@@ -71,7 +94,7 @@ export default function AppPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {activities.length > 0 && (
+        {activities.length > 0 && warmupDone && (
           <motion.div
             key="hud"
             initial={{ opacity: 0 }}
