@@ -6,7 +6,6 @@ import { readDemoCache } from "@/lib/demo-cache";
 import type { ActivityPhoto } from "@/lib/strava/types";
 
 const PHOTOS_CACHE_PATH = path.join(process.cwd(), ".demo-photos-cache.json");
-const CONCURRENCY = 5;
 
 export async function GET() {
   const runs = readDemoCache();
@@ -21,26 +20,27 @@ export async function GET() {
   let fetched = 0;
   let failed = 0;
 
-  for (let i = 0; i < runsWithPhotos.length; i += CONCURRENCY) {
-    const batch = runsWithPhotos.slice(i, i + CONCURRENCY);
-    await Promise.all(
-      batch.map(async (run) => {
-        try {
-          const res = await stravaFetch(
-            `/activities/${run.id}/photos?size=600`
-          );
-          if (res.ok) {
-            photosMap[run.id] = await res.json();
-            fetched++;
-          } else {
-            failed++;
-          }
-        } catch {
-          failed++;
-        }
-      })
-    );
-    await new Promise((r) => setTimeout(r, 1000));
+  for (const run of runsWithPhotos) {
+    try {
+      const res = await stravaFetch(`/activities/${run.id}/photos?size=600`);
+      if (res.status === 429) {
+        // Save whatever we have so far, then bail with a clear error
+        fs.writeFileSync(PHOTOS_CACHE_PATH, JSON.stringify(photosMap));
+        return NextResponse.json(
+          { ok: false, error: "Rate limited by Strava — wait a few minutes and try again", fetched, failed },
+          { status: 429 }
+        );
+      }
+      if (res.ok) {
+        photosMap[run.id] = await res.json();
+        fetched++;
+      } else {
+        failed++;
+      }
+    } catch {
+      failed++;
+    }
+    await new Promise((r) => setTimeout(r, 2000));
   }
 
   fs.writeFileSync(PHOTOS_CACHE_PATH, JSON.stringify(photosMap));
@@ -50,6 +50,5 @@ export async function GET() {
     activitiesWithPhotos: runsWithPhotos.length,
     fetched,
     failed,
-    cachedAt: PHOTOS_CACHE_PATH,
   });
 }
