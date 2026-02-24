@@ -73,8 +73,14 @@ export async function syncDemoCache(accessToken: string): Promise<void> {
       fs.writeFileSync(CACHE_PATH, JSON.stringify(allRuns));
     }
 
-    // Fetch and cache photo URLs for activities that have photos
-    const runsWithPhotos = allRuns.filter((a) => a.total_photo_count > 0);
+    // Fetch and cache photo URLs for this year's activities with photos.
+    // Strava read limit is 100 req/15min; batches with a 1s delay keeps it safe.
+    const thisYear = new Date().getFullYear();
+    const runsWithPhotos = allRuns.filter(
+      (a) =>
+        a.total_photo_count > 0 &&
+        new Date(a.start_date).getFullYear() === thisYear
+    );
     if (runsWithPhotos.length === 0) return;
 
     const photosMap: Record<string, ActivityPhoto[]> = {};
@@ -97,6 +103,7 @@ export async function syncDemoCache(accessToken: string): Promise<void> {
           }
         })
       );
+      await new Promise((r) => setTimeout(r, 1000));
     }
 
     fs.writeFileSync(PHOTOS_CACHE_PATH, JSON.stringify(photosMap));

@@ -41,4 +41,5 @@ export interface ActivityPhoto {
   urls: Record<string, string>;
   caption: string;
   source: number;
+  location?: [number, number] | null;
 }

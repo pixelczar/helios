@@ -10,7 +10,12 @@ const CONCURRENCY = 5;
 
 export async function GET() {
   const runs = readDemoCache();
-  const runsWithPhotos = runs.filter((a) => a.total_photo_count > 0);
+  const thisYear = new Date().getFullYear();
+  const runsWithPhotos = runs.filter(
+    (a) =>
+      a.total_photo_count > 0 &&
+      new Date(a.start_date).getFullYear() === thisYear
+  );
 
   const photosMap: Record<string, ActivityPhoto[]> = {};
   let fetched = 0;
@@ -35,6 +40,7 @@ export async function GET() {
         }
       })
     );
+    await new Promise((r) => setTimeout(r, 1000));
   }
 
   fs.writeFileSync(PHOTOS_CACHE_PATH, JSON.stringify(photosMap));

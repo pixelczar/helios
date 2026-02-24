@@ -8,6 +8,7 @@ import type { StravaActivity } from "@/lib/strava/types";
 import { RouteGeometry } from "./RouteGeometry";
 import { PlaceholderGeometry } from "./PlaceholderGeometry";
 import { MapOverlay } from "./MapOverlay";
+import { PhotoPins } from "./PhotoPins";
 import { getRouteColor } from "@/lib/colors";
 import { useActivityStore } from "@/stores/activityStore";
 import { useSettingsStore } from "@/stores/settingsStore";
@@ -132,6 +133,14 @@ export function RunCard({
           normParams={decodedRoute.normParams}
         />
       )}
+      {isFocused && decodedRoute?.normParams && activity.total_photo_count > 0 && (
+        <PhotoPins
+          activityId={activity.id}
+          normParams={decodedRoute.normParams}
+          color={color}
+        />
+      )}
+
       {/* Invisible hit area for click detection */}
       <mesh visible={false}>
         <planeGeometry args={[12, 12]} />
