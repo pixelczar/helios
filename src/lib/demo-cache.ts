@@ -74,7 +74,7 @@ export async function syncDemoCache(accessToken: string): Promise<void> {
     }
 
     // Fetch and cache photo URLs for this year's activities with photos.
-    // Strava read limit is 100 req/15min; batches with a 1s delay keeps it safe.
+    // Sequential with 2s delay to stay within Strava's 100 read req/15min.
     const thisYear = new Date().getFullYear();
     const runsWithPhotos = allRuns.filter(
       (a) =>
@@ -84,29 +84,26 @@ export async function syncDemoCache(accessToken: string): Promise<void> {
     if (runsWithPhotos.length === 0) return;
 
     const photosMap: Record<string, ActivityPhoto[]> = {};
-    const CONCURRENCY = 5;
 
-    for (let i = 0; i < runsWithPhotos.length; i += CONCURRENCY) {
-      const batch = runsWithPhotos.slice(i, i + CONCURRENCY);
-      await Promise.all(
-        batch.map(async (run) => {
-          try {
-            const res = await fetch(
-              `${STRAVA_API_BASE}/activities/${run.id}/photos?size=600`,
-              { headers }
-            );
-            if (res.ok) {
-              photosMap[run.id] = await res.json();
-            }
-          } catch {
-            // skip this activity's photos
-          }
-        })
-      );
-      await new Promise((r) => setTimeout(r, 1000));
+    for (const run of runsWithPhotos) {
+      try {
+        const res = await fetch(
+          `${STRAVA_API_BASE}/activities/${run.id}/photos?size=600`,
+          { headers }
+        );
+        if (res.status === 429) break; // stop immediately, save what we have
+        if (res.ok) {
+          photosMap[run.id] = await res.json();
+        }
+      } catch {
+        // skip this activity's photos
+      }
+      await new Promise((r) => setTimeout(r, 2000));
     }
 
-    fs.writeFileSync(PHOTOS_CACHE_PATH, JSON.stringify(photosMap));
+    if (Object.keys(photosMap).length > 0) {
+      fs.writeFileSync(PHOTOS_CACHE_PATH, JSON.stringify(photosMap));
+    }
   } catch (err) {
     console.error("Failed to sync demo cache:", err);
   }
