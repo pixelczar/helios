@@ -33,6 +33,18 @@ export async function GET(request: NextRequest) {
 
     const res = await stravaFetch(url);
 
+    if (res.status === 429) {
+      // Fall back to demo cache so the app isn't completely broken
+      let runs = readDemoCache();
+      if (after) {
+        const afterEpoch = Number(after);
+        runs = runs.filter(
+          (a) => new Date(a.start_date).getTime() / 1000 > afterEpoch
+        );
+      }
+      return NextResponse.json(runs);
+    }
+
     if (!res.ok) {
       return NextResponse.json(
         { error: "Failed to fetch activities" },
@@ -49,6 +61,14 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(runs);
   } catch {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+    // Token refresh failed or Strava unreachable — fall back to cache
+    let runs = readDemoCache();
+    if (after) {
+      const afterEpoch = Number(after);
+      runs = runs.filter(
+        (a) => new Date(a.start_date).getTime() / 1000 > afterEpoch
+      );
+    }
+    return NextResponse.json(runs);
   }
 }
