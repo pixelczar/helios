@@ -149,7 +149,7 @@ export function RouteGeometry({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curve, segmentCount, controls.tracerWidth, color, colorEnd, controls.gradPeakPoint, controls.gradEndAlpha]);
 
-  // Single-color derivatives — used only for the start cap
+  // Single-color derivatives — used for start/end caps
   const coreColor = useMemo(
     () => color.clone().multiplyScalar(controls.coreBrightness),
     [color, controls.coreBrightness]
@@ -157,6 +157,14 @@ export function RouteGeometry({
   const glowColorVal = useMemo(
     () => color.clone().multiplyScalar(controls.glowBrightness),
     [color, controls.glowBrightness]
+  );
+  const coreColorEnd = useMemo(
+    () => endCol.clone().multiplyScalar(controls.coreBrightness),
+    [endCol, controls.coreBrightness]
+  );
+  const glowColorEnd = useMemo(
+    () => endCol.clone().multiplyScalar(controls.glowBrightness),
+    [endCol, controls.glowBrightness]
   );
 
   // Brightness-only colors — vertex colors × brightness scalar = final color
@@ -206,6 +214,11 @@ export function RouteGeometry({
   const firstPoint = useMemo(() => {
     if (!routeVectors || routeVectors.length < 1) return null;
     return routeVectors[0].clone();
+  }, [routeVectors]);
+
+  const lastPoint = useMemo(() => {
+    if (!routeVectors || routeVectors.length < 2) return null;
+    return routeVectors[routeVectors.length - 1].clone();
   }, [routeVectors]);
 
   // Reset tracer to the route origin whenever this card gains focus
@@ -373,6 +386,34 @@ export function RouteGeometry({
             <meshBasicMaterial
               transparent
               color={coreColor}
+              toneMapped={false}
+              depthWrite={true}
+              depthTest={true}
+              blending={THREE.NormalBlending}
+              opacity={1}
+            />
+          </mesh>
+        </>
+      )}
+
+      {/* End cap */}
+      {controls.capEnabled && lastPoint && (
+        <>
+          <mesh position={lastPoint} renderOrder={0} geometry={glowCapGeo}>
+            <meshBasicMaterial
+              transparent
+              color={glowColorEnd}
+              toneMapped={false}
+              depthWrite={false}
+              depthTest={false}
+              blending={THREE.AdditiveBlending}
+              opacity={controls.capGlowOpacity}
+            />
+          </mesh>
+          <mesh position={lastPoint} renderOrder={1} geometry={coreCapGeo}>
+            <meshBasicMaterial
+              transparent
+              color={coreColorEnd}
               toneMapped={false}
               depthWrite={true}
               depthTest={true}

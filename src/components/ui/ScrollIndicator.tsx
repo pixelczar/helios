@@ -251,7 +251,7 @@ export function ScrollIndicator() {
             const y = positions[i] * h;
             const isCurrent = i === curIdx;
             const color = ratios[i] !== undefined ? getRouteColorHex(ratios[i]) : "#ffffff";
-            const r = isCurrent ? 2.5 + t * 1 : 1.5 + t * 0.5;
+            const r = isCurrent ? 3 + t * 1 : 2 + t * 0.5;
             const alphaHex = isCurrent ? "ff" : Math.round(0x55 + t * (0xcc - 0x55)).toString(16).padStart(2, "0");
             ctx.beginPath();
             ctx.arc(cx, y, r, 0, Math.PI * 2);
@@ -298,7 +298,7 @@ export function ScrollIndicator() {
     );
     ratiosRef.current = data.map((d) => d.ratio);
     // Enforce monotonicity so the tracer never reverses direction.
-    // Activities arrive reverse-chronologically from Strava, but backdated
+    // Activities are sorted chronologically (oldest first), but backdated
     // entries or same-day runs can break strict ordering.
     const positions = dayPositionsRef.current;
     if (positions.length > 1) {
@@ -410,11 +410,7 @@ export function ScrollIndicator() {
             lockSnap();
             const scrollable = container.scrollHeight - container.clientHeight;
             // Use instant scroll — the springs in RunTimeline and ScrollIndicator
-            // provide smooth visual transitions. Smooth scrolling would expose
-            // the non-monotonic mapping between scroll position and day-based
-            // timeline position (activities are newest-first, so intermediate
-            // scroll positions map to progressively older/upward day positions
-            // before jumping to Today at the end).
+            // provide smooth visual transitions.
             container.scrollTo({ top: scrollable, behavior: "instant" });
           }
         }}

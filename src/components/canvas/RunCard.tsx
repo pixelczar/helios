@@ -58,7 +58,15 @@ export function RunCard({
     [prevPaceRatio]
   );
 
-  useFrame(() => {
+  // Spring impulse that fires once when this card snaps into focus
+  const kick = useRef({
+    z: 0, vz: 0,
+    ry: 0, vry: 0,
+    rz: 0, vrz: 0,
+    wasFocused: false,
+  });
+
+  useFrame((_, delta) => {
     if (!groupRef.current) return;
 
     // How far this run is from the current scroll center (0 = centered, 1 = far)
@@ -88,9 +96,33 @@ export function RunCard({
       }
     });
 
-    // Subtle rotation when off-center
-    groupRef.current.rotation.y = (1 - visibility) * 0.15;
+    // Fire impulse on focus transition
+    const k = kick.current;
+    if (isFocused && !k.wasFocused) {
+      k.vz = 0.8;
+      k.vry = 0.4;
+      k.vrz = 0.15;
+    }
+    k.wasFocused = isFocused;
+
+    // Damp the kick spring (stiffness 200, damping 14 → ~0.5 ratio, settles in ~0.4s)
+    const dt = Math.min(delta, 0.04);
+    const kS = 200, kD = 14;
+
+    k.vz += (-kS * k.z - kD * k.vz) * dt;
+    k.z += k.vz * dt;
+
+    k.vry += (-kS * k.ry - kD * k.vry) * dt;
+    k.ry += k.vry * dt;
+
+    k.vrz += (-kS * k.rz - kD * k.vrz) * dt;
+    k.rz += k.vrz * dt;
+
+    // Subtle rotation when off-center + kick
+    groupRef.current.rotation.y = (1 - visibility) * 0.15 + k.ry;
     groupRef.current.rotation.x = (1 - visibility) * -0.05;
+    groupRef.current.rotation.z = k.rz;
+    groupRef.current.position.z = zPosition + k.z;
   });
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {

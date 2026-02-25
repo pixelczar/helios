@@ -95,8 +95,8 @@ export function RunCounter({
   // Track scroll direction for number slide animation
   useEffect(() => {
     if (currentIndex !== prevIndexRef.current) {
-      // displayed = currentIndex + 1 (1 = newest, N = oldest)
-      // when currentIndex increases (scrolling older), displayed number increases → slide up
+      // displayed = currentIndex + 1 (1 = oldest, N = newest)
+      // when currentIndex increases (scrolling newer), displayed number increases → slide up
       slideDirection.current = currentIndex > prevIndexRef.current ? 1 : -1;
       prevIndexRef.current = currentIndex;
     }

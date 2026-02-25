@@ -56,7 +56,7 @@ export function TodaySummary() {
 
   // Fetch map tiles from most recent activity with a polyline
   useEffect(() => {
-    const activity = activities.find((a) => a.map.summary_polyline);
+    const activity = [...activities].reverse().find((a) => a.map.summary_polyline);
     if (!activity) return;
 
     const route = decodedRoutes.get(activity.id);

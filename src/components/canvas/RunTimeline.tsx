@@ -65,7 +65,7 @@ export function RunTimeline() {
         if (scrollable <= 0) return;
 
         const offset = el.scrollTop / scrollable;
-        // rawIdx: 0 = newest, N-1 = oldest, N = Today
+        // rawIdx: 0 = oldest, N-1 = newest, N = Today
         const rawIdx = offset * totalSlots;
         const floor = Math.floor(rawIdx);
         const frac = rawIdx - floor;
@@ -137,7 +137,7 @@ export function RunTimeline() {
 
     groupRef.current.position.z = sp.value;
 
-    // rawIndex: 0 = newest, N-1 = oldest, N = Today
+    // rawIndex: 0 = oldest, N-1 = newest, N = Today
     const rawIndex = scroll.offset * totalSlots;
     const index = Math.min(activities.length, Math.round(rawIndex));
     const progress = rawIndex - Math.floor(rawIndex);

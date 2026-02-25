@@ -78,6 +78,8 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
       if (!res.ok) throw new Error("Failed to fetch");
 
       const runs: StravaActivity[] = await res.json();
+      // Sort chronologically (oldest first) so timeline reads top→bottom = earliest→today
+      runs.sort((a, b) => new Date(a.start_date_local).getTime() - new Date(b.start_date_local).getTime());
 
       set((state) => {
         const newActivities =
@@ -143,7 +145,14 @@ export const useActivityStore = create<ActivityState>((set, get) => ({
         page++;
       }
 
-      set({ isLoading: false, hasMore: false });
+      // Final sort — ensure chronological (oldest first) across all pages
+      allRuns.sort((a, b) => new Date(a.start_date_local).getTime() - new Date(b.start_date_local).getTime());
+      set((state) => ({
+        activities: allRuns,
+        decodedRoutes: decodeActivities(allRuns, state.decodedRoutes),
+        isLoading: false,
+        hasMore: false,
+      }));
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : "Unknown error",

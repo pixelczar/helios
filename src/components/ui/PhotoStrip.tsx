@@ -136,7 +136,8 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
   };
 
   // Bloom glow box-shadow — animates in after card settles
-  const glowOpacity = useMotionValue(0);
+  const glowRaw = useMotionValue(0);
+  const glowOpacity = useSpring(glowRaw, { stiffness: 120, damping: 20 });
   const glowBoxShadow = useTransform(
     glowOpacity,
     (o) =>
@@ -147,13 +148,13 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
   useEffect(() => {
     if (expandedIndex !== null) {
       const t = setTimeout(() => {
-        glowOpacity.set(1);
+        glowRaw.set(1);
       }, reducedMotion ? 0 : 180);
       return () => clearTimeout(t);
     } else {
-      glowOpacity.set(0);
+      glowRaw.set(0);
     }
-  }, [expandedIndex, reducedMotion, glowOpacity]);
+  }, [expandedIndex, reducedMotion, glowRaw]);
 
   if (photoCount === 0) return null;
 
@@ -177,7 +178,7 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
                   key={photo.unique_id}
                   layoutId={`photo-${photo.unique_id}`}
                   onClick={() => setExpandedIndex(i)}
-                  className="w-12 h-12 rounded-lg overflow-hidden border border-white/10 cursor-pointer"
+                  className="w-12 h-12 rounded-lg overflow-hidden border-2 border-white cursor-pointer ring-1 ring-inset ring-black/50"
                   initial={
                     reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }
                   }
@@ -186,8 +187,11 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
                     duration: reducedMotion ? 0 : 0.4,
                     delay: i * 0.06,
                     ease: EASE,
+                    // Override for scale — no stagger delay, spring physics
+                    scale: { type: "spring", stiffness: 300, damping: 26 },
                   }}
                   whileHover={{ scale: 1.08 }}
+                  whileTap={{ scale: 0.95 }}
                 >
                   <img
                     src={url}
