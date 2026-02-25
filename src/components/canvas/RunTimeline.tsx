@@ -129,8 +129,8 @@ export function RunTimeline() {
     }
 
     const dt = Math.min(delta, 0.04);
-    const stiffness = 300;
-    const damping = 26;
+    const stiffness = 120;
+    const damping = 20;
     const force = stiffness * (targetZ - sp.value) - damping * sp.velocity;
     sp.velocity += force * dt;
     sp.value += sp.velocity * dt;

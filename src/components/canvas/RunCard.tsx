@@ -11,7 +11,6 @@ import { MapOverlay } from "./MapOverlay";
 import { PhotoPins } from "./PhotoPins";
 import { getRouteColor } from "@/lib/colors";
 import { useActivityStore } from "@/stores/activityStore";
-import { useSettingsStore } from "@/stores/settingsStore";
 import { wasPanDrag } from "./CameraPan";
 
 interface RunCardProps {
@@ -40,7 +39,6 @@ export function RunCard({
   const scroll = useScroll();
   const groupRef = useRef<THREE.Group>(null!);
   const [hovered, setHovered] = useState(false);
-  const showMapOverlay = useSettingsStore((s) => s.showMapOverlay);
   const decodedRoute = useActivityStore((s) => s.decodedRoutes.get(activity.id));
 
   // totalSlots = N (N activities, Today sits at offset 1 after all of them)
@@ -64,6 +62,7 @@ export function RunCard({
     ry: 0, vry: 0,
     rz: 0, vrz: 0,
     wasFocused: false,
+    active: false,
   });
 
   useFrame((_, delta) => {
@@ -91,8 +90,9 @@ export function RunCard({
           opacity: number;
           userData: { baseOpacity?: number; skipVisibility?: boolean };
         };
+        if (mat.userData?.skipVisibility) return;
         const base = mat.userData?.baseOpacity ?? 1.0;
-        mat.opacity = mat.userData?.skipVisibility ? base : base * vis;
+        mat.opacity = base * vis;
       }
     });
 
@@ -102,21 +102,28 @@ export function RunCard({
       k.vz = 0.8;
       k.vry = 0.4;
       k.vrz = 0.15;
+      k.active = true;
     }
     k.wasFocused = isFocused;
 
-    // Damp the kick spring (stiffness 200, damping 14 → ~0.5 ratio, settles in ~0.4s)
-    const dt = Math.min(delta, 0.04);
-    const kS = 200, kD = 14;
+    // Only run spring math while kick is active
+    if (k.active) {
+      const dt = Math.min(delta, 0.04);
+      const kS = 200, kD = 14;
 
-    k.vz += (-kS * k.z - kD * k.vz) * dt;
-    k.z += k.vz * dt;
+      k.vz += (-kS * k.z - kD * k.vz) * dt;
+      k.z += k.vz * dt;
+      k.vry += (-kS * k.ry - kD * k.vry) * dt;
+      k.ry += k.vry * dt;
+      k.vrz += (-kS * k.rz - kD * k.vrz) * dt;
+      k.rz += k.vrz * dt;
 
-    k.vry += (-kS * k.ry - kD * k.vry) * dt;
-    k.ry += k.vry * dt;
-
-    k.vrz += (-kS * k.rz - kD * k.vrz) * dt;
-    k.rz += k.vrz * dt;
+      // Sleep when settled
+      if (Math.abs(k.z) + Math.abs(k.vz) + Math.abs(k.ry) + Math.abs(k.vry) + Math.abs(k.rz) + Math.abs(k.vrz) < 0.001) {
+        k.z = k.vz = k.ry = k.vry = k.rz = k.vrz = 0;
+        k.active = false;
+      }
+    }
 
     // Subtle rotation when off-center + kick
     groupRef.current.rotation.y = (1 - visibility) * 0.15 + k.ry;
@@ -158,7 +165,7 @@ export function RunCard({
       ) : (
         <PlaceholderGeometry color={color} colorEnd={colorEnd} showTracer={isFocused} />
       )}
-      {showMapOverlay && decodedRoute?.normParams && decodedRoute.points.length > 0 && (
+      {decodedRoute?.normParams && decodedRoute.points.length > 0 && (
         <MapOverlay
           activityId={activity.id}
           rawPoints={decodedRoute.points}

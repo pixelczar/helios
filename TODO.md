@@ -11,5 +11,12 @@
 ## Mobile
 - [ ] Fix mobile view
 
+## UI / Polish
+- [ ] Light Mode
+- [ ] Goals Cleanup
+- [ ] Bottom activity number to date
+- [ ] Title at the top?
+- [ ] Move settings to title?
+
 ## Edge Cases
 - [ ] Handle manual activities / activities without a map/route

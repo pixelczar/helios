@@ -5,7 +5,6 @@ import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
 import { useIsMobile } from "@/hooks/useMediaQuery";
-import { useTheme } from "@/components/providers/ThemeProvider";
 import {
   useGoalStore,
   calculateGoalProgress,
@@ -427,15 +426,12 @@ function SettingsContent({
   timeRange: TimeRange;
   onTimeRangeChange: (range: TimeRange) => void;
 }) {
-  const { theme, toggleTheme } = useTheme();
   const goals = useGoalStore((s) => s.goals);
   const yearlyTarget = useGoalStore((s) => s.yearlyTarget);
   const setYearlyTarget = useGoalStore((s) => s.setYearlyTarget);
   const updateGoal = useGoalStore((s) => s.updateGoal);
   const removeGoal = useGoalStore((s) => s.removeGoal);
   const addGoal = useGoalStore((s) => s.addGoal);
-  const showMapOverlay = useSettingsStore((s) => s.showMapOverlay);
-  const setShowMapOverlay = useSettingsStore((s) => s.setShowMapOverlay);
   const hiddenGoalIds = useSettingsStore((s) => s.hiddenGoalIds);
   const toggleGoalVisibility = useSettingsStore((s) => s.toggleGoalVisibility);
   const [isDemo, setIsDemo] = useState(false);
@@ -456,26 +452,6 @@ function SettingsContent({
         />
       </Section>
 
-      {/* Map overlay */}
-      <Section title="Map">
-        <ToggleRow
-          options={["Hide", "Show"]}
-          selected={showMapOverlay ? 1 : 0}
-          onSelect={(i) => setShowMapOverlay(i === 1)}
-        />
-      </Section>
-
-      {/* Theme */}
-      <Section title="Theme">
-        <ToggleRow
-          options={["Dark", "Light"]}
-          selected={theme === "dark" ? 0 : 1}
-          onSelect={(i) => {
-            if ((i === 0 && theme !== "dark") || (i === 1 && theme !== "light"))
-              toggleTheme();
-          }}
-        />
-      </Section>
 
       {/* Yearly goal */}
       <Section title="Yearly target">

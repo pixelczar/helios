@@ -396,32 +396,19 @@ export function RouteGeometry({
         </>
       )}
 
-      {/* End cap */}
+      {/* End cap — subtle, no glow */}
       {controls.capEnabled && lastPoint && (
-        <>
-          <mesh position={lastPoint} renderOrder={0} geometry={glowCapGeo}>
-            <meshBasicMaterial
-              transparent
-              color={glowColorEnd}
-              toneMapped={false}
-              depthWrite={false}
-              depthTest={false}
-              blending={THREE.AdditiveBlending}
-              opacity={controls.capGlowOpacity}
-            />
-          </mesh>
-          <mesh position={lastPoint} renderOrder={1} geometry={coreCapGeo}>
-            <meshBasicMaterial
-              transparent
-              color={coreColorEnd}
-              toneMapped={false}
-              depthWrite={true}
-              depthTest={true}
-              blending={THREE.NormalBlending}
-              opacity={1}
-            />
-          </mesh>
-        </>
+        <mesh position={lastPoint} renderOrder={1} geometry={coreCapGeo}>
+          <meshBasicMaterial
+            transparent
+            color={coreColorEnd}
+            toneMapped={false}
+            depthWrite={true}
+            depthTest={true}
+            blending={THREE.NormalBlending}
+            opacity={controls.gradEndAlpha}
+          />
+        </mesh>
       )}
     </group>
   );

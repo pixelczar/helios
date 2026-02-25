@@ -5,7 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { ROUTE_DEFAULTS as D } from "./routeDefaults";
 
-const RING_RADIUS = 1.2;
+const LEMNISCATE_SCALE = 0.7;
 const RING_POINTS = 80;
 const RADIAL_SEGMENTS = 6;
 
@@ -38,15 +38,17 @@ export function PlaceholderGeometry({
     return () => mql.removeEventListener("change", handler);
   }, []);
 
-  // Closed circular curve in XY plane (faces camera at +Z)
+  // Closed lemniscate (infinity) curve in XY plane
+  // Starts at leftmost point (-scale, 0) and flows clockwise
   const ringCurve = useMemo(() => {
     const points: THREE.Vector3[] = [];
     for (let i = 0; i < RING_POINTS; i++) {
-      const angle = -(i / RING_POINTS) * Math.PI * 2;
+      const t = Math.PI + (i / RING_POINTS) * Math.PI * 2;
+      const denom = 1 + Math.sin(t) * Math.sin(t);
       points.push(
         new THREE.Vector3(
-          Math.cos(angle) * RING_RADIUS,
-          Math.sin(angle) * RING_RADIUS,
+          (Math.cos(t) / denom) * LEMNISCATE_SCALE,
+          (Math.sin(t) * Math.cos(t) / denom) * LEMNISCATE_SCALE,
           0
         )
       );
@@ -173,9 +175,9 @@ export function PlaceholderGeometry({
     return tex;
   }, []);
 
-  // Start cap at angle=0 (rightmost point of ring)
+  // Start cap at leftmost point of lemniscate
   const firstPoint = useMemo(
-    () => new THREE.Vector3(RING_RADIUS, 0, 0),
+    () => new THREE.Vector3(-LEMNISCATE_SCALE, 0, 0),
     []
   );
 

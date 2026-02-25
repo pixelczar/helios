@@ -162,7 +162,7 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
 
   return (
     <>
-      <div className="flex gap-1.5 mt-4">
+      <div className="flex gap-1.5 mt-6">
         {isLoading && thumbnails.length === 0
           ? Array.from({ length: Math.min(photoCount, 4) }).map((_, i) => (
               <div
@@ -178,17 +178,17 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
                   key={photo.unique_id}
                   layoutId={`photo-${photo.unique_id}`}
                   onClick={() => setExpandedIndex(i)}
-                  className="w-12 h-12 rounded-lg overflow-hidden border-2 border-white cursor-pointer ring-1 ring-inset ring-black/50"
+                  className="w-20 h-20 rounded-lg overflow-hidden border-0 border-white/40 cursor-pointer ring-1 ring-inset ring-black/50"
                   initial={
                     reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }
                   }
                   animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   transition={{
-                    duration: reducedMotion ? 0 : 0.4,
+                    duration: reducedMotion ? 0 : 0.3,
                     delay: i * 0.06,
                     ease: EASE,
                     // Override for scale — no stagger delay, spring physics
-                    scale: { type: "spring", stiffness: 300, damping: 26 },
+                    scale: { type: "spring", stiffness: 200, damping: 26 },
                   }}
                   whileHover={{ scale: 1.08 }}
                   whileTap={{ scale: 0.95 }}

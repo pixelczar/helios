@@ -15,15 +15,16 @@ interface PhotoPinsProps {
 
 // Torus ring — scales outward from dot, fades via temporal envelope
 const ringGeo = new THREE.TorusGeometry(0.03, 0.002, 6, 48);
-const dotGeo = new THREE.SphereGeometry(0.016, 12, 12);
+const dotGeo = new THREE.SphereGeometry(0.018, 12, 12);
 // Hit area much larger than the dot for forgiving clicks
 const hitGeo = new THREE.CircleGeometry(0.14, 32);
 
-const PERIOD = 3.0;
-const SCALE_MIN = 0.3;
-const SCALE_MAX = 4.0;
-const OPACITY_PEAK = 0.14;
-const DOT_OPACITY = 0.22;
+const PIN_USER_DATA = { skipVisibility: true };
+const PERIOD = 2.0;
+const SCALE_MIN = 0.1;
+const SCALE_MAX = 5.0;
+const OPACITY_PEAK = .8;
+const DOT_OPACITY = 0.9;
 
 // --- Cubic bezier evaluator (CSS-style timing function) ---
 function _bx(t: number, x1: number, x2: number) {
@@ -52,19 +53,19 @@ function cubicBezier(x: number, x1: number, y1: number, x2: number, y2: number):
   return _by(Math.max(0, Math.min(1, t)), y1, y2);
 }
 
-// Opacity envelope: bezier-shaped quick attack + long silky fade.
+// Opacity envelope: bezier-shaped soft attack + long buttery fade.
 // Zero at both boundaries for seamless loop.
 function opacityEnvelope(t: number): number {
-  // Quick ramp in — first 10% of cycle
-  // (0.0, 0.8, 0.3, 1.0): snappy ease-out, reaches full brightness fast
-  const ramp = t < 0.1
-    ? cubicBezier(t / 0.1, 0.0, 0.8, 0.3, 1.0)
+  // Soft ramp in — first 12% of cycle
+  // (0.16, 0.84, 0.36, 1.0): smooth ease-out, gentle rise to peak
+  const ramp = t < 0.12
+    ? cubicBezier(t / 0.12, 0.16, 0.84, 0.36, 1.0)
     : 1.0;
 
-  // Long fade out — starts at 8% (slight overlap with ramp for smooth peak)
-  // (0.12, 0.72, 0.32, 1.0): drops quickly at first, then long wispy tail
-  const fadeProg = Math.max(0, (t - 0.08) / 0.92);
-  const fade = 1 - cubicBezier(fadeProg, 0.12, 0.72, 0.32, 1.0);
+  // Long buttery fade — starts at 10% (smooth overlap with ramp at peak)
+  // (0.06, 0.86, 0.20, 1.0): gradual initial drop then long dissolving tail
+  const fadeProg = Math.max(0, (t - 0.10) / 0.90);
+  const fade = 1 - cubicBezier(fadeProg, 0.06, 0.86, 0.20, 1.0);
 
   return ramp * fade;
 }
@@ -75,9 +76,9 @@ function uidToPhase(uid: string): number {
   return (Math.abs(h) % 1000) / 1000;
 }
 
-function easeOutCubic(t: number): number {
+function easeOutQuart(t: number): number {
   const inv = 1 - t;
-  return 1 - inv * inv * inv;
+  return 1 - inv * inv * inv * inv;
 }
 
 interface PinMeshRefs {
@@ -115,7 +116,7 @@ export function PhotoPins({ activityId, normParams, color }: PhotoPinsProps) {
       // Ring: scales outward from dot, envelope fades it as it expands
       if (refs.ring) {
         const t = ((elapsed + uidToPhase(uid) * PERIOD) % PERIOD) / PERIOD;
-        const scale = SCALE_MIN + (SCALE_MAX - SCALE_MIN) * easeOutCubic(t);
+        const scale = SCALE_MIN + (SCALE_MAX - SCALE_MIN) * easeOutQuart(t);
         const opacity = OPACITY_PEAK * opacityEnvelope(t);
 
         refs.ring.scale.setScalar(scale);
@@ -125,8 +126,8 @@ export function PhotoPins({ activityId, normParams, color }: PhotoPinsProps) {
       // Dot hover feedback — smooth scale + brightness
       if (refs.dot) {
         const isHovered = uid === hoveredUid.current;
-        const targetScale = isHovered ? 1.8 : 1.0;
-        const targetOpacity = isHovered ? 0.45 : DOT_OPACITY;
+        const targetScale = isHovered ? 1.5 : 1.0;
+        const targetOpacity = isHovered ? 1.0 : DOT_OPACITY;
         const mat = refs.dot.material as THREE.MeshBasicMaterial;
         refs.dot.scale.setScalar(
           THREE.MathUtils.lerp(refs.dot.scale.x, targetScale, lerp)
@@ -174,6 +175,7 @@ export function PhotoPins({ activityId, normParams, color }: PhotoPinsProps) {
                 depthWrite={false}
                 depthTest={false}
                 opacity={0}
+                userData={PIN_USER_DATA}
               />
             </mesh>
 
@@ -190,6 +192,7 @@ export function PhotoPins({ activityId, normParams, color }: PhotoPinsProps) {
                 depthWrite={false}
                 depthTest={false}
                 opacity={DOT_OPACITY}
+                userData={PIN_USER_DATA}
               />
             </mesh>
           </group>
