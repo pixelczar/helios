@@ -25,13 +25,30 @@ export const metadata: Metadata = {
     title: "Helios",
     description: "Your running journey, visualized",
     siteName: "Helios",
+    url: siteUrl,
     type: "website",
     locale: "en_US",
+    images: [
+      {
+        url: "/helios-og-img.png",
+        width: 1200,
+        height: 630,
+        alt: "Helios — Your running journey, visualized",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Helios",
     description: "Your running journey, visualized",
+    images: [
+      {
+        url: "/helios-og-img.png",
+        width: 1200,
+        height: 630,
+        alt: "Helios — Your running journey, visualized",
+      },
+    ],
   },
 };
 
