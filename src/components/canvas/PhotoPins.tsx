@@ -20,54 +20,21 @@ const dotGeo = new THREE.SphereGeometry(0.018, 12, 12);
 const hitGeo = new THREE.CircleGeometry(0.14, 32);
 
 const PIN_USER_DATA = { skipVisibility: true };
-const PERIOD = 2.0;
+const PERIOD = 1.5;
 const SCALE_MIN = 0.1;
 const SCALE_MAX = 5.0;
 const OPACITY_PEAK = .8;
 const DOT_OPACITY = 0.9;
 
-// --- Cubic bezier evaluator (CSS-style timing function) ---
-function _bx(t: number, x1: number, x2: number) {
-  const i = 1 - t;
-  return 3 * i * i * t * x1 + 3 * i * t * t * x2 + t * t * t;
-}
-function _by(t: number, y1: number, y2: number) {
-  const i = 1 - t;
-  return 3 * i * i * t * y1 + 3 * i * t * t * y2 + t * t * t;
-}
-function _bdx(t: number, x1: number, x2: number) {
-  const i = 1 - t;
-  return 3 * i * i * x1 + 6 * i * t * (x2 - x1) + 3 * t * t * (1 - x2);
-}
-function cubicBezier(x: number, x1: number, y1: number, x2: number, y2: number): number {
-  if (x <= 0) return 0;
-  if (x >= 1) return 1;
-  let t = x;
-  for (let i = 0; i < 8; i++) {
-    const err = _bx(t, x1, x2) - x;
-    if (Math.abs(err) < 1e-6) break;
-    const d = _bdx(t, x1, x2);
-    if (Math.abs(d) < 1e-6) break;
-    t -= err / d;
-  }
-  return _by(Math.max(0, Math.min(1, t)), y1, y2);
-}
-
-// Opacity envelope: bezier-shaped soft attack + long buttery fade.
-// Zero at both boundaries for seamless loop.
+// Opacity envelope: smooth onset → pure exponential decay.
+// e^(-t/τ) is how energy actually dissipates — heat, ripples, waves.
+// Infinitely smooth at every derivative; no shoulders, no inflection points.
 function opacityEnvelope(t: number): number {
-  // Soft ramp in — first 12% of cycle
-  // (0.16, 0.84, 0.36, 1.0): smooth ease-out, gentle rise to peak
-  const ramp = t < 0.12
-    ? cubicBezier(t / 0.12, 0.16, 0.84, 0.36, 1.0)
-    : 1.0;
-
-  // Long buttery fade — starts at 10% (smooth overlap with ramp at peak)
-  // (0.06, 0.86, 0.20, 1.0): gradual initial drop then long dissolving tail
-  const fadeProg = Math.max(0, (t - 0.10) / 0.90);
-  const fade = 1 - cubicBezier(fadeProg, 0.06, 0.86, 0.20, 1.0);
-
-  return ramp * fade;
+  // Hermite-smooth onset over first 4% of cycle (~80ms)
+  const u = Math.min(1, t / 0.04);
+  const onset = u * u * (3 - 2 * u);
+  // τ = 0.14 — sharper falloff, bright ~200ms, ghost by ~600ms
+  return onset * Math.exp(-t / 0.14) * 1.33;
 }
 
 function uidToPhase(uid: string): number {

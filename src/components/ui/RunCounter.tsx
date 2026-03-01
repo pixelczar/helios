@@ -27,6 +27,8 @@ const GOAL_TYPE_LABELS: Record<GoalType, { label: string; unit: string }> = {
   monthly_runs: { label: "Monthly runs", unit: "runs" },
 };
 
+const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"] as const;
+
 const EASE_OUT = [0.25, 0.1, 0.25, 1] as const;
 
 // Gentle spring — smooth with a subtle bounce at the end
@@ -167,6 +169,9 @@ export function RunCounter({
     return new Date();
   }, [currentActivity]);
 
+  const dateMonth = useMemo(() => MONTHS[asOfDate.getMonth()], [asOfDate]);
+  const dateDay = useMemo(() => asOfDate.getDate(), [asOfDate]);
+
   const visibleGoals = useMemo(
     () => goals.filter((g) => !hiddenGoalIds.includes(g.id)),
     [goals, hiddenGoalIds]
@@ -180,24 +185,57 @@ export function RunCounter({
   if (totalRuns === 0) return null;
 
   return (
-    <motion.div
-      className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto z-20 gap-4"
-      initial="visible"
-      animate={shouldShow ? "visible" : "hidden"}
-      variants={{
-        hidden: {
-          opacity: 0, y: 14, scale: 0.95, filter: "blur(6px)", pointerEvents: "none" as const,
-          transition: reducedMotion ? { duration: 0 } : { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
-        },
-        visible: {
-          opacity: 1, y: 0, scale: 1, filter: "blur(0px)", pointerEvents: "auto" as const,
-          transition: reducedMotion ? { duration: 0 } : { ...SPRING_SOFT, opacity: { duration: 0.3 }, filter: { duration: 0.3 } },
-        },
-      }}
-      onHoverStart={() => { hovering.current = true; setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
-      onHoverEnd={() => { hovering.current = false; if (!expanded && !isMobile) hideTimer.current = setTimeout(() => setVisible(false), 2500); }}
-    >
-      {/* Pill — layout animates width as chevrons mount/unmount */}
+    <>
+      {/* Top logo — opens settings on click */}
+      <motion.div
+        className="absolute top-6 left-1/2 -translate-x-1/2 pointer-events-auto z-20"
+        initial="visible"
+        animate={shouldShow ? "visible" : "hidden"}
+        variants={{
+          hidden: {
+            opacity: 0, y: -10, scale: 0.95, filter: "blur(6px)", pointerEvents: "none" as const,
+            transition: reducedMotion ? { duration: 0 } : { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
+          },
+          visible: {
+            opacity: 1, y: 0, scale: 1, filter: "blur(0px)", pointerEvents: "auto" as const,
+            transition: reducedMotion ? { duration: 0 } : { ...SPRING_SOFT, opacity: { duration: 0.3 }, filter: { duration: 0.3 } },
+          },
+        }}
+        onHoverStart={() => { hovering.current = true; setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
+        onHoverEnd={() => { hovering.current = false; if (!expanded && !isMobile) hideTimer.current = setTimeout(() => setVisible(false), 2500); }}
+      >
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="cursor-pointer"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src="/helios-logo.png"
+            alt="Helios"
+            className="h-5 w-auto brightness-0 invert opacity-100 hover:opacity-60 transition-opacity duration-300"
+          />
+        </button>
+      </motion.div>
+
+      {/* Bottom pill — run navigation */}
+      <motion.div
+        className="absolute bottom-4 md:bottom-8 left-1/2 -translate-x-1/2 pointer-events-auto z-20 gap-4"
+        initial="visible"
+        animate={shouldShow ? "visible" : "hidden"}
+        variants={{
+          hidden: {
+            opacity: 0, y: 14, scale: 0.95, filter: "blur(6px)", pointerEvents: "none" as const,
+            transition: reducedMotion ? { duration: 0 } : { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
+          },
+          visible: {
+            opacity: 1, y: 0, scale: 1, filter: "blur(0px)", pointerEvents: "auto" as const,
+            transition: reducedMotion ? { duration: 0 } : { ...SPRING_SOFT, opacity: { duration: 0.3 }, filter: { duration: 0.3 } },
+          },
+        }}
+        onHoverStart={() => { hovering.current = true; setVisible(true); if (hideTimer.current) clearTimeout(hideTimer.current); }}
+        onHoverEnd={() => { hovering.current = false; if (!expanded && !isMobile) hideTimer.current = setTimeout(() => setVisible(false), 2500); }}
+      >
+        {/* Pill — layout animates width as chevrons mount/unmount */}
       <motion.div
         layout
         transition={{ layout: reducedMotion ? { duration: 0 } : SPRING_PILL }}
@@ -229,11 +267,10 @@ export function RunCounter({
           )}
         </AnimatePresence>
 
-        {/* Center — clickable to expand settings */}
-        <motion.button
+        {/* Center — goal rings and date */}
+        <motion.div
           layout
-          onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-6 px-3 py-2 cursor-pointer"
+          className="flex items-center gap-6 px-3 py-2"
           variants={{
             hidden: {},
             visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
@@ -246,46 +283,58 @@ export function RunCounter({
             </motion.div>
           ))}
 
-          {/* Run counter — hidden when at Today */}
-          {!isAtToday && (
+          {/* Date display — month slides only on month change, day slides on every activity change */}
+          <motion.div
+            layout
+            className="flex items-baseline gap-1.5 font-mono"
+            variants={{
+              hidden: {},
+              visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
+            }}
+          >
+            {/* Month */}
             <motion.div
+              variants={pillItemVariants}
               layout
-              className="flex items-baseline gap-2 font-sans tabular-nums"
-              variants={{
-                hidden: {},
-                visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
-              }}
+              className="relative overflow-hidden"
+              style={{ height: "1.5rem" }}
             >
-              <motion.div
-                variants={pillItemVariants}
-                layout
-                className="relative overflow-hidden"
-                style={{ height: "1.5rem" }}
-              >
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <motion.span
-                    key={currentIndex}
-                    initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
-                    animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                    exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
-                    transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
-                    className="text-base text-neutral-200 block"
-                  >
-                    {currentIndex + 1}
-                  </motion.span>
-                </AnimatePresence>
-              </motion.div>
-              <motion.span
-                className="text-base text-neutral-500 font-bold flex items-baseline gap-2"
-                variants={pillItemVariants}
-                layout
-              >
-                <span className="text-sm font-light opacity-50">/</span>
-                <span className="font-light">{totalRuns}</span>
-              </motion.span>
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={dateMonth}
+                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
+                  animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                  exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
+                  transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
+                  className="text-base text-neutral-200 block tracking-widest"
+                >
+                  {dateMonth}
+                </motion.span>
+              </AnimatePresence>
             </motion.div>
-          )}
-        </motion.button>
+
+            {/* Day */}
+            <motion.div
+              variants={pillItemVariants}
+              layout
+              className="relative overflow-hidden"
+              style={{ height: "1.5rem" }}
+            >
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.span
+                  key={currentIndex}
+                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
+                  animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                  exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
+                  transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
+                  className="text-base text-neutral-200 block"
+                >
+                  {dateDay}
+                </motion.span>
+              </AnimatePresence>
+            </motion.div>
+          </motion.div>
+        </motion.div>
 
         {/* Next chevron — only when not at newest */}
         <AnimatePresence initial={false}>
@@ -322,43 +371,44 @@ export function RunCounter({
               {/* Blur scrim */}
               <motion.div
                 className="fixed inset-0 z-40"
-                initial={{ backgroundColor: "rgba(0,0,0,0)", backdropFilter: "blur(0px)" }}
-                animate={{ backgroundColor: "rgba(0,0,0,0.4)", backdropFilter: "blur(8px)" }}
-                exit={{ backgroundColor: "rgba(0,0,0,0)", backdropFilter: "blur(0px)" }}
+                initial={{ backgroundColor: "rgba(179,109,0,0)", backdropFilter: "blur(0px)" }}
+                animate={{ backgroundColor: "rgba(179,109,0,0.09)", backdropFilter: "blur(8px)" }}
+                exit={{ backgroundColor: "rgba(179,109,0,0)", backdropFilter: "blur(0px)" }}
                 transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
                 onClick={() => setExpanded(false)}
               />
-              {/* Panel */}
+              {/* Panel — drops down from logo */}
               <motion.div
-                className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50"
-                initial={{ opacity: 0, y: 10 }}
+                className="fixed top-2 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center"
+                initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 10 }}
+                exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
               >
-                <div className="bg-neutral-950/90 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/60 overflow-hidden">
-                  <SettingsContent
-                    timeRange={timeRange}
-                    onTimeRangeChange={onTimeRangeChange}
-                  />
-                </div>
-                {/* Close button */}
+                {/* Close button — above the logo */}
                 <button
                   onClick={() => setExpanded(false)}
-                  className="mt-3 mx-auto flex items-center justify-center w-10 h-10 rounded-full bg-neutral-900/20 backdrop-blur-lg shadow-2xl shadow-black/40 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-900/80 transition-colors cursor-pointer"
+                  className="mb-10 flex items-center justify-center w-10 h-10 rounded-full bg-neutral-900/20 backdrop-blur-lg shadow-2xl shadow-black/40 text-neutral-500 hover:text-neutral-200 hover:bg-neutral-900/80 transition-colors cursor-pointer"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <line x1="18" y1="6" x2="6" y2="18" />
                     <line x1="6" y1="6" x2="18" y2="18" />
                   </svg>
                 </button>
+                <div className="bg-neutral-950/90 backdrop-blur-xl rounded-2xl shadow-2xl shadow-black/60 overflow-hidden">
+                  <SettingsContent
+                    timeRange={timeRange}
+                    onTimeRangeChange={onTimeRangeChange}
+                  />
+                </div>
               </motion.div>
             </>
           )}
         </AnimatePresence>,
         document.body
       )}
-    </motion.div>
+      </motion.div>
+    </>
   );
 }
 

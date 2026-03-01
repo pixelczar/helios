@@ -525,7 +525,7 @@ export function ScrollIndicator() {
                 }}
                 className="text-base font-medium tabular-nums tracking-wide"
               >
-                {paceData[currentIndex].dayOfYear}
+                Day {paceData[currentIndex].dayOfYear}
               </motion.span>
               <motion.span
                 variants={{
