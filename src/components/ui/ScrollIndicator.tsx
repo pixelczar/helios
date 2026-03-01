@@ -205,7 +205,7 @@ export function ScrollIndicator() {
       // Breathing glow — pulses gently at rest, intensifies when moving
       const breathe = Math.sin(pulsePhase.current) * 0.5 + 0.5;
       if (glowRef.current) {
-        const baseSize = 24 + t * 10;
+        const baseSize = 28 + t * 12;
         const s = baseSize + speedBoost * 16 + breathe * 4;
         glowRef.current.style.width = `${s}px`;
         glowRef.current.style.height = `${s}px`;
@@ -240,23 +240,53 @@ export function ScrollIndicator() {
       if (canvas) {
         const ctx = canvas.getContext("2d");
         if (ctx) {
-          const h = canvas.height;
-          const cx = canvas.width / 2;
-          ctx.clearRect(0, 0, canvas.width, h);
+          // Scale canvas buffer for retina crispness
+          const dpr = window.devicePixelRatio || 1;
+          const cssW = 40;
+          const cssH = canvas.clientHeight || 400;
+          const bufW = Math.round(cssW * dpr);
+          const bufH = Math.round(cssH * dpr);
+          if (canvas.width !== bufW || canvas.height !== bufH) {
+            canvas.width = bufW;
+            canvas.height = bufH;
+          }
+          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+          ctx.clearRect(0, 0, cssW, cssH);
 
-          // Activity tick marks — dots at each activity's day position
+          // Logical coordinates — draw in CSS pixels
+          const h = cssH;
+          const cx = cssW / 2;
+
+          // Activity tick marks — horizontal lines that grow left near the active dot
           const curIdx = useActivityStore.getState().currentIndex;
           const ratios = ratiosRef.current;
+          const dotPos = delayedProgress.current; // spring-delayed position
+          const anchorX = cx; // center of the track line
           for (let i = 0; i < positions.length; i++) {
             const y = positions[i] * h;
             const isCurrent = i === curIdx;
             const color = ratios[i] !== undefined ? getRouteColorHex(ratios[i]) : "#ffffff";
-            const r = isCurrent ? 3 + t * 1 : 2 + t * 0.5;
-            const alphaHex = isCurrent ? "ff" : Math.round(0x55 + t * (0xcc - 0x55)).toString(16).padStart(2, "0");
+
+            // Proximity: how close is this tick to the active dot (0-1, 1 = on top)
+            const dist = Math.abs(positions[i] - dotPos);
+            const proximity = Math.max(0, 1 - dist / 0.08);
+
+            // Base tick length + proximity growth
+            const baseLen = 5 + t * 2;
+            const growLen = proximity * (10 + t * 4);
+            const tickLen = baseLen + growLen;
+
+            const alpha = isCurrent ? 1.0 : 0.55 + proximity * 0.35 + t * 0.1;
+
             ctx.beginPath();
-            ctx.arc(cx, y, r, 0, Math.PI * 2);
-            ctx.fillStyle = `${color}${alphaHex}`;
-            ctx.fill();
+            ctx.moveTo(anchorX, y);
+            ctx.lineTo(anchorX - tickLen, y);
+            ctx.strokeStyle = color;
+            ctx.globalAlpha = alpha;
+            ctx.lineWidth = isCurrent ? 1.5 : 1;
+            ctx.lineCap = "round";
+            ctx.stroke();
+            ctx.globalAlpha = 1;
           }
 
           // Trail wake particles
@@ -414,7 +444,7 @@ export function ScrollIndicator() {
             container.scrollTo({ top: scrollable, behavior: "instant" });
           }
         }}
-        className={`absolute left-1/2 -translate-x-1/2 -bottom-5 text-[9px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-300 cursor-pointer ${
+        className={`absolute left-1/2 -translate-x-1/2 -bottom-6 text-[11px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-300 cursor-pointer ${
           currentIndex >= totalRuns
             ? "text-neutral-200"
             : "text-neutral-600 hover:text-neutral-400"
@@ -427,21 +457,19 @@ export function ScrollIndicator() {
       </button>
 
       {/* Base track — subtle, barely-there line */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-[1.5px] h-full bg-white/4 rounded-full" />
+      <div className="absolute left-1/2 -translate-x-1/2 w-[1.5px] h-full bg-white/4 rounded-full z-0" />
 
       {/* Trail canvas — fading wake particles behind the dot */}
       <canvas
         ref={trailCanvasRef}
-        width={8}
-        height={400}
-        className="absolute left-1/2 -translate-x-1/2 h-full pointer-events-none"
-        style={{ width: "8px" }}
+        className="absolute left-1/2 -translate-x-1/2 h-full pointer-events-none z-2"
+        style={{ width: "40px" }}
       />
 
       {/* Colored pace track — width + mask interpolated by rAF */}
       <div
         ref={paceTrackRef}
-        className="absolute left-1/2 -translate-x-1/2 h-full rounded-full overflow-hidden"
+        className="absolute left-1/2 -translate-x-1/2 h-full rounded-full overflow-hidden z-1"
         style={{ width: "1.5px", willChange: "width" }}
       >
         <svg
@@ -480,22 +508,22 @@ export function ScrollIndicator() {
       {/* Ghost dot — the faintest trailing shadow */}
       <div
         ref={ghostRef}
-        className="absolute left-1/2 -translate-x-1/2 z-5 pointer-events-none"
+        className="absolute left-1/2 -translate-x-1/2 z-3 pointer-events-none"
         style={{ top: "0%", opacity: 0 }}
       >
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: "14px",
-            height: "14px",
+            width: "18px",
+            height: "18px",
             background: `radial-gradient(circle, ${currentColor}40 0%, transparent 70%)`,
           }}
         />
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: "4px",
-            height: "4px",
+            width: "5px",
+            height: "5px",
             backgroundColor: currentColor,
             opacity: 0.3,
           }}
@@ -567,8 +595,8 @@ export function ScrollIndicator() {
           ref={glowRef}
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: "24px",
-            height: "24px",
+            width: "28px",
+            height: "28px",
             opacity: 0.25,
             background: `radial-gradient(circle, ${currentColor} 0%, ${currentColor}40 30%, transparent 70%)`,
             willChange: "width, height, opacity",
@@ -579,8 +607,8 @@ export function ScrollIndicator() {
           ref={dotCoreRef}
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: "7px",
-            height: "7px",
+            width: "9px",
+            height: "9px",
             backgroundColor: currentColor,
             boxShadow: `0 0 6px ${currentColor}80, 0 0 12px ${currentColor}30`,
             willChange: "transform",

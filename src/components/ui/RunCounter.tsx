@@ -253,7 +253,7 @@ export function RunCounter({
               exit="exit"
               whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
               onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex - 1); }}
-              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
+              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
               aria-label="Previous run"
             >
               <svg
@@ -348,7 +348,7 @@ export function RunCounter({
               exit="exit"
               whileTap={{ scale: 0.8, transition: { type: "spring", stiffness: 500, damping: 20 } }}
               onClick={(e) => { e.stopPropagation(); scrollToIndex(currentIndex + 1); }}
-              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200"
+              className="group/chevron flex-none flex items-center justify-center h-9 rounded-full cursor-pointer overflow-hidden hover:bg-white/10 transition-colors duration-200 focus:outline-none focus-visible:ring-1 focus-visible:ring-white/20"
               aria-label="Next run"
             >
               <svg
