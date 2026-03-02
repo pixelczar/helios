@@ -37,16 +37,13 @@ export function LandingPage() {
         className="relative z-10 flex flex-col items-center gap-4"
       >
         <div className="flex flex-col gap-8 items-center">
-          <motion.h1
+          <motion.img
             variants={itemVariants(0, reducedMotion)}
-            className="text-9xl text-neutral-100 mb-24"
-            style={{
-              fontStyle: "italic",
-              fontWeight: 900,
-            }}
-          >
-            Helios
-          </motion.h1>
+            src="/helios-greeter.png"
+            alt="Helios"
+            className="mb-32 h-20 w-auto"
+            draggable={false}
+          />
 
           {/* <motion.p
             variants={itemVariants(1, reducedMotion)}

@@ -40,7 +40,7 @@ export function readDemoPhotosCache(activityId: number): ActivityPhoto[] {
     // fall through to bundled fallback
   }
 
-  const map = seedPhotos as Record<string, ActivityPhoto[]>;
+  const map = seedPhotos as unknown as Record<string, ActivityPhoto[]>;
   return map[activityId] ?? [];
 }
 

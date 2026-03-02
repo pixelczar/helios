@@ -36,6 +36,19 @@ const CYCLE = SLOT * ROUTES.length; // 27s full cycle
  * A single animated route path.
  * Uses requestAnimationFrame for the draw-on (dashoffset) and opacity cycling.
  */
+// Opacity gradient: bright at path start → dim near drawing tip → bright tracer dot.
+// Achieved by stacking segments that all start at position 0:
+//   base  (0 → 100% of drawn) at 0.12  — faint everywhere
+//   body1 (0 →  65% of drawn) at 0.50  — medium near start
+//   body2 (0 →  25% of drawn) at 0.50  — very bright at start
+//   tracer (last 3% of drawn) at 1.00  — bright leading dot
+// Composite: start ≈ 1.0, mid ≈ 0.6, far ≈ 0.12, tracer = 1.0
+const BASE_OP = 0.12;
+const BODY_OP = 0.50;
+const BODY1_FRAC = 0.65;
+const BODY2_FRAC = 0.25;
+const TRACER_FRAC = 0.03;
+
 function AnimatedRoute({
   d,
   color,
@@ -49,23 +62,32 @@ function AnimatedRoute({
   delay: number;
   reducedMotion: boolean;
 }) {
-  const pathRef = useRef<SVGPathElement>(null);
+  const baseRef = useRef<SVGPathElement>(null);
+  const body1Ref = useRef<SVGPathElement>(null);
+  const body2Ref = useRef<SVGPathElement>(null);
+  const tracerRef = useRef<SVGPathElement>(null);
   const totalLengthRef = useRef<number | null>(null);
 
   const animate = useCallback(
     (time: number) => {
-      const el = pathRef.current;
-      if (!el) return;
+      const base = baseRef.current;
+      const body1 = body1Ref.current;
+      const body2 = body2Ref.current;
+      const tracer = tracerRef.current;
+      if (!base || !body1 || !body2 || !tracer) return;
 
       if (totalLengthRef.current === null) {
-        totalLengthRef.current = el.getTotalLength();
+        totalLengthRef.current = base.getTotalLength();
       }
       const totalLength = totalLengthRef.current;
 
       if (reducedMotion) {
-        el.style.strokeDasharray = `${totalLength}`;
-        el.style.strokeDashoffset = "0";
-        el.style.opacity = "0.3";
+        base.style.strokeDasharray = `${totalLength}`;
+        base.style.strokeDashoffset = "0";
+        base.style.opacity = "0.3";
+        body1.style.opacity = "0";
+        body2.style.opacity = "0";
+        tracer.style.opacity = "0";
         return;
       }
 
@@ -76,32 +98,61 @@ function AnimatedRoute({
       let progress: number; // 0 = fully hidden, 1 = fully drawn
 
       if (t < DRAW_DURATION) {
-        // Drawing phase
         const drawT = t / DRAW_DURATION;
-        // Ease in-out cubic
         progress = drawT < 0.5
           ? 4 * drawT * drawT * drawT
           : 1 - Math.pow(-2 * drawT + 2, 3) / 2;
-        // Fade in over the first second of drawing
         opacity = Math.min(1, t / FADE_IN_DURATION);
       } else if (t < DRAW_DURATION + HOLD_DURATION) {
-        // Hold phase
         progress = 1;
         opacity = 1;
       } else if (t < ACTIVE_DURATION) {
-        // Fade out phase — ease-out for gentle dissolve
         const fadeT = (t - DRAW_DURATION - HOLD_DURATION) / FADE_OUT_DURATION;
         progress = 1;
         opacity = 1 - fadeT * fadeT;
       } else {
-        // Rest phase — invisible until next cycle
         progress = 0;
         opacity = 0;
       }
 
-      el.style.strokeDasharray = `${totalLength}`;
-      el.style.strokeDashoffset = `${totalLength * (1 - progress)}`;
-      el.style.opacity = `${opacity}`;
+      const drawnLen = progress * totalLength;
+      const tracerLen = totalLength * TRACER_FRAC;
+
+      // Smooth blend: gradient → uniform as draw finishes (no pop)
+      const blend = progress < 0.75 ? 0 : Math.pow((progress - 0.75) / 0.25, 2);
+
+      // Base: full drawn portion, ramps from faint → full
+      const baseOp = opacity * (BASE_OP + (1 - BASE_OP) * blend);
+      base.style.strokeDasharray = `${drawnLen} ${totalLength}`;
+      base.style.strokeDashoffset = "0";
+      base.style.opacity = `${baseOp}`;
+
+      // Body layers & tracer: fade out as blend → 1 (gradient dissolves to uniform)
+      const layerScale = opacity * (1 - blend);
+
+      if (layerScale > 0.001 && drawnLen > 0.5) {
+        // Body1: start → 65% of drawn
+        const b1 = drawnLen * BODY1_FRAC;
+        body1.style.strokeDasharray = `${b1} ${totalLength}`;
+        body1.style.strokeDashoffset = "0";
+        body1.style.opacity = `${BODY_OP * layerScale}`;
+
+        // Body2: start → 25% of drawn
+        const b2 = drawnLen * BODY2_FRAC;
+        body2.style.strokeDasharray = `${b2} ${totalLength}`;
+        body2.style.strokeDashoffset = "0";
+        body2.style.opacity = `${BODY_OP * layerScale}`;
+
+        // Tracer: bright dot at leading edge
+        const visTr = Math.min(tracerLen, drawnLen);
+        tracer.style.strokeDasharray = `${visTr} ${totalLength}`;
+        tracer.style.strokeDashoffset = `${visTr - drawnLen}`;
+        tracer.style.opacity = `${layerScale}`;
+      } else {
+        body1.style.opacity = "0";
+        body2.style.opacity = "0";
+        tracer.style.opacity = "0";
+      }
     },
     [delay, reducedMotion]
   );
@@ -112,7 +163,6 @@ function AnimatedRoute({
 
   useEffect(() => {
     if (reducedMotion) {
-      // Set static state after mount (need path to be rendered to get totalLength)
       requestAnimationFrame((t) => animateRef.current(t));
       return;
     }
@@ -126,17 +176,23 @@ function AnimatedRoute({
     return () => cancelAnimationFrame(rafId);
   }, [reducedMotion]);
 
+  const pathProps = {
+    d,
+    fill: "none" as const,
+    stroke: color,
+    strokeWidth,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    opacity: 0,
+  };
+
   return (
-    <path
-      ref={pathRef}
-      d={d}
-      fill="none"
-      stroke={color}
-      strokeWidth={strokeWidth}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      opacity={0}
-    />
+    <g>
+      <path ref={baseRef} {...pathProps} />
+      <path ref={body1Ref} {...pathProps} />
+      <path ref={body2Ref} {...pathProps} />
+      <path ref={tracerRef} {...pathProps} />
+    </g>
   );
 }
 
