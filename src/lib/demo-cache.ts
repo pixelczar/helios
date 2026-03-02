@@ -3,6 +3,7 @@ import path from "path";
 import { STRAVA_API_BASE } from "@/lib/strava/constants";
 import type { StravaActivity, ActivityPhoto } from "@/lib/strava/types";
 import seedData from "@/data/demo-activities.json";
+import seedPhotos from "@/data/demo-photos.json";
 
 const CACHE_PATH = path.join(process.cwd(), ".demo-cache.json");
 const PHOTOS_CACHE_PATH = path.join(process.cwd(), ".demo-photos-cache.json");
@@ -25,6 +26,7 @@ export function readDemoCache(): StravaActivity[] {
 
 /**
  * Reads cached photo arrays for a given activity, returning [] if not found.
+ * Falls back to bundled seed photos when the runtime cache doesn't exist (e.g. on Vercel).
  */
 export function readDemoPhotosCache(activityId: number): ActivityPhoto[] {
   try {
@@ -35,9 +37,11 @@ export function readDemoPhotosCache(activityId: number): ActivityPhoto[] {
       return map[activityId] ?? [];
     }
   } catch {
-    // fall through
+    // fall through to bundled fallback
   }
-  return [];
+
+  const map = seedPhotos as Record<string, ActivityPhoto[]>;
+  return map[activityId] ?? [];
 }
 
 /**
