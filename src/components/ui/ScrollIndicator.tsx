@@ -69,6 +69,9 @@ export function ScrollIndicator() {
   // Previous scroll progress for delta detection
   const prevScrollProgress = useRef(0);
 
+  // Hovered pip — mouse position as 0-1 progress on the track
+  const hoveredProgress = useRef<number | null>(null);
+
   const totalRuns = activities.length;
   const discreteProgress = totalRuns > 1 ? currentIndex / (totalRuns - 1) : 0;
 
@@ -261,6 +264,7 @@ export function ScrollIndicator() {
           const curIdx = useActivityStore.getState().currentIndex;
           const ratios = ratiosRef.current;
           const dotPos = delayedProgress.current; // spring-delayed position
+          const hoverPos = hoveredProgress.current; // mouse position (null when not hovering)
           const anchorX = cx; // center of the track line
           for (let i = 0; i < positions.length; i++) {
             const y = positions[i] * h;
@@ -271,19 +275,28 @@ export function ScrollIndicator() {
             const dist = Math.abs(positions[i] - dotPos);
             const proximity = Math.max(0, 1 - dist / 0.08);
 
+            // Hover proximity: how close is this tick to the mouse pointer
+            const hoverProximity = hoverPos !== null
+              ? Math.max(0, 1 - Math.abs(positions[i] - hoverPos) / 0.06)
+              : 0;
+
+            // Combined proximity — take the stronger of active-dot or hover
+            const effectiveProximity = Math.max(proximity, hoverProximity);
+
             // Base tick length + proximity growth
             const baseLen = 5 + t * 2;
-            const growLen = proximity * (10 + t * 4);
+            const growLen = effectiveProximity * (10 + t * 4);
             const tickLen = baseLen + growLen;
 
-            const alpha = isCurrent ? 1.0 : 0.55 + proximity * 0.35 + t * 0.1;
+            const alpha = isCurrent ? 1.0 : 0.55 + effectiveProximity * 0.35 + t * 0.1;
+            const lineW = isCurrent ? 1.5 : 1 + hoverProximity * 0.5;
 
             ctx.beginPath();
             ctx.moveTo(anchorX, y);
             ctx.lineTo(anchorX - tickLen, y);
             ctx.strokeStyle = color;
             ctx.globalAlpha = alpha;
-            ctx.lineWidth = isCurrent ? 1.5 : 1;
+            ctx.lineWidth = lineW;
             ctx.lineCap = "round";
             ctx.stroke();
             ctx.globalAlpha = 1;
@@ -395,6 +408,11 @@ export function ScrollIndicator() {
 
   const handlePointerMove = useCallback(
     (e: React.PointerEvent) => {
+      // Always track mouse position for pip hover effects
+      if (trackRef.current) {
+        const rect = trackRef.current.getBoundingClientRect();
+        hoveredProgress.current = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+      }
       if (!isDragging.current) return;
       e.preventDefault();
       scrollToProgress(e.clientY);
@@ -424,6 +442,7 @@ export function ScrollIndicator() {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => {
         setHovered(false);
+        hoveredProgress.current = null;
         if (!isDragging.current) hoverTarget.current = 0;
       }}
     >
