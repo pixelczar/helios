@@ -59,7 +59,7 @@ export function LandingPage() {
         <motion.a
           variants={itemVariants(2, reducedMotion)}
           href="/api/auth/strava"
-          className="group relative flex items-center gap-3 px-8 py-3.5 rounded-full bg-[#FC4C02] text-white font-medium text-sm tracking-wide transition-shadow hover:shadow-[0_0_30px_rgba(252,76,2,0.3)]"
+          className="group relative flex items-center gap-3 px-8 py-3.5 rounded-full bg-[#FC4C02] text-white font-medium text-sm tracking-wide transition-shadow duration-200 hover:shadow-[0_0_30px_rgba(252,76,2,0.3)]"
         >
           <svg
             viewBox="0 0 24 24"
@@ -75,7 +75,7 @@ export function LandingPage() {
         <motion.a
           variants={itemVariants(3, reducedMotion)}
           href="/api/auth/demo"
-          className="flex items-center gap-3 px-8 py-3.5 rounded-full border border-neutral-800 text-neutral-400 font-medium text-sm tracking-wide transition-colors hover:border-neutral-600 hover:text-neutral-200 duration-500"
+          className="flex items-center gap-3 px-8 py-3.5 rounded-full border border-neutral-800 text-neutral-400 font-medium text-sm tracking-wide transition-colors hover:border-neutral-600 hover:text-neutral-200 duration-200"
         >
           View Demo
         </motion.a>

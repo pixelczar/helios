@@ -193,7 +193,7 @@ export function RunCounter({
         animate={shouldShow ? "visible" : "hidden"}
         variants={{
           hidden: {
-            opacity: 0, y: -10, scale: 0.95, filter: "blur(6px)", pointerEvents: "none" as const,
+            opacity: 0, y: -10, scale: 0.95, filter: "blur(4px)", pointerEvents: "none" as const,
             transition: reducedMotion ? { duration: 0 } : { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
           },
           visible: {
@@ -212,7 +212,7 @@ export function RunCounter({
           <img
             src="/helios-logo.png"
             alt="Helios"
-            className="h-5 w-auto brightness-0 invert opacity-100 hover:opacity-60 transition-opacity duration-300"
+            className="h-5 w-auto brightness-0 invert opacity-100 hover:opacity-60 transition-opacity duration-200"
           />
         </button>
       </motion.div>
@@ -224,7 +224,7 @@ export function RunCounter({
         animate={shouldShow ? "visible" : "hidden"}
         variants={{
           hidden: {
-            opacity: 0, y: 14, scale: 0.95, filter: "blur(6px)", pointerEvents: "none" as const,
+            opacity: 0, y: 14, scale: 0.95, filter: "blur(4px)", pointerEvents: "none" as const,
             transition: reducedMotion ? { duration: 0 } : { duration: 0.45, ease: [0.4, 0, 0.2, 1] },
           },
           visible: {
@@ -239,7 +239,7 @@ export function RunCounter({
       <motion.div
         layout
         transition={{ layout: reducedMotion ? { duration: 0 } : SPRING_PILL }}
-        className="bg-neutral-900/20 backdrop-blur-md rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-500 hover:bg-neutral-900/80 overflow-hidden"
+        className="bg-neutral-900/20 backdrop-blur-md rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-200 hover:bg-neutral-900/80 overflow-hidden"
       >
         {/* Prev chevron — only when not at oldest */}
         <AnimatePresence initial={false}>
@@ -259,7 +259,7 @@ export function RunCounter({
               <svg
                 width="20" height="20" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200 flex-none"
+                className="text-neutral-500 transition-colors duration-200 group-hover/chevron:text-neutral-200 flex-none"
               >
                 <polyline points="15 18 9 12 15 6" />
               </svg>
@@ -354,7 +354,7 @@ export function RunCounter({
               <svg
                 width="20" height="20" viewBox="0 0 24 24" fill="none"
                 stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-                className="text-neutral-500 transition-colors duration-300 group-hover/chevron:text-neutral-200 flex-none"
+                className="text-neutral-500 transition-colors duration-200 group-hover/chevron:text-neutral-200 flex-none"
               >
                 <polyline points="9 18 15 12 9 6" />
               </svg>

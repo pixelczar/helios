@@ -56,6 +56,7 @@ function GoalRing({
   const radius = 14;
   const circumference = 2 * Math.PI * radius;
   const offset = circumference - (percentage / 100) * circumference;
+  const gradientId = `goalPanelGrad-${goal.id}`;
 
   const displayValue = goal.type.endsWith("distance")
     ? current.toFixed(1)
@@ -86,7 +87,7 @@ function GoalRing({
             cy="16"
             r={radius}
             fill="none"
-            stroke="url(#goalGradient)"
+            stroke={`url(#${gradientId})`}
             strokeWidth="1.5"
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -94,7 +95,7 @@ function GoalRing({
             transition={reducedMotion ? { duration: 0 } : { type: "spring", damping: 20, stiffness: 100 }}
           />
           <defs>
-            <linearGradient id="goalGradient" x1="0" y1="0" x2="1" y2="1">
+            <linearGradient id={gradientId} x1="0" y1="0" x2="1" y2="1">
               <stop offset="0%" stopColor="#ff8844" />
               <stop offset="100%" stopColor="#00ffcc" />
             </linearGradient>

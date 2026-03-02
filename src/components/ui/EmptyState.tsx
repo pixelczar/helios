@@ -14,7 +14,7 @@ function item(i: number, reducedMotion: boolean | null) {
     };
   }
   return {
-    initial: { opacity: 0, y: 12, filter: "blur(6px)" },
+    initial: { opacity: 0, y: 12, filter: "blur(4px)" },
     animate: {
       opacity: 1,
       y: 0,
@@ -85,7 +85,7 @@ function RouteSilhouette({ reducedMotion }: { reducedMotion: boolean | null }) {
         cy="130"
         r="2"
         fill="rgba(255,255,255,0.12)"
-        initial={reducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0 }}
+        initial={reducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.6 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={
           reducedMotion
@@ -100,7 +100,7 @@ function RouteSilhouette({ reducedMotion }: { reducedMotion: boolean | null }) {
         cy="15"
         r="2"
         fill="rgba(255,255,255,0.2)"
-        initial={reducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0 }}
+        initial={reducedMotion ? { opacity: 1 } : { opacity: 0, scale: 0.6 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={
           reducedMotion

@@ -463,7 +463,7 @@ export function ScrollIndicator() {
             container.scrollTo({ top: scrollable, behavior: "instant" });
           }
         }}
-        className={`absolute left-1/2 -translate-x-1/2 -bottom-6 text-[11px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-300 cursor-pointer ${
+        className={`absolute left-1/2 -translate-x-1/2 -bottom-6 text-[11px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-200 cursor-pointer ${
           currentIndex >= totalRuns
             ? "text-neutral-200"
             : "text-neutral-600 hover:text-neutral-400"
@@ -578,7 +578,7 @@ export function ScrollIndicator() {
                 variants={{
                   initial: { opacity: 0, y: 6, filter: "blur(3px)" },
                   animate: { opacity: 0.3, y: 0, filter: "blur(0px)", transition: { duration: 0.3, delay: 0.025, ease: [0.25, 0.1, 0.25, 1] } },
-                  exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, delay: 0.015, ease: [0.25, 0.1, 0.25, 1] } },
+                  exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } },
                 }}
                 className="text-sm font-light"
               >
@@ -588,7 +588,7 @@ export function ScrollIndicator() {
                 variants={{
                   initial: { opacity: 0, y: 6, filter: "blur(3px)" },
                   animate: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.3, delay: 0.05, ease: [0.25, 0.1, 0.25, 1] } },
-                  exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, delay: 0.03, ease: [0.25, 0.1, 0.25, 1] } },
+                  exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } },
                 }}
                 className="text-base font-medium tabular-nums tracking-wide"
                 style={{

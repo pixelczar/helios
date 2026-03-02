@@ -238,7 +238,7 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
                   initial={
                     reducedMotion
                       ? { opacity: 0 }
-                      : { opacity: 0, scale: 0.88, y: 16 }
+                      : { opacity: 0, scale: 0.92, y: 16 }
                   }
                   animate={
                     reducedMotion
