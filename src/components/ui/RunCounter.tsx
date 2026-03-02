@@ -239,7 +239,7 @@ export function RunCounter({
       <motion.div
         layout
         transition={{ layout: reducedMotion ? { duration: 0 } : SPRING_PILL }}
-        className="bg-neutral-900/20 backdrop-blur-md rounded-full flex items-center shadow-2xl shadow-black/40 select-none transition-colors duration-200 hover:bg-neutral-900/80 overflow-hidden"
+        className="rounded-full flex items-center select-none overflow-hidden"
       >
         {/* Prev chevron — only when not at oldest */}
         <AnimatePresence initial={false}>
@@ -276,14 +276,14 @@ export function RunCounter({
             visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
           }}
         >
-          {/* Goal rings */}
-          {progresses.map((p) => (
+          {/* Goal rings — hidden on Today */}
+          {!isAtToday && progresses.map((p) => (
             <motion.div key={p.goal.id} variants={pillItemVariants} layout>
               <GoalRing progress={p} />
             </motion.div>
           ))}
 
-          {/* Date display — month slides only on month change, day slides on every activity change */}
+          {/* Date display */}
           <motion.div
             layout
             className="flex items-baseline gap-1.5 font-mono"
@@ -292,7 +292,6 @@ export function RunCounter({
               visible: { transition: { staggerChildren: reducedMotion ? 0 : 0.04 } },
             }}
           >
-            {/* Month */}
             <motion.div
               variants={pillItemVariants}
               layout
@@ -301,38 +300,40 @@ export function RunCounter({
             >
               <AnimatePresence mode="popLayout" initial={false}>
                 <motion.span
-                  key={dateMonth}
+                  key={isAtToday ? "today" : dateMonth}
                   initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
                   animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
                   exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
                   transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
                   className="text-base text-neutral-200 block tracking-widest"
                 >
-                  {dateMonth}
+                  {isAtToday ? "TODAY" : dateMonth}
                 </motion.span>
               </AnimatePresence>
             </motion.div>
 
-            {/* Day */}
-            <motion.div
-              variants={pillItemVariants}
-              layout
-              className="relative overflow-hidden"
-              style={{ height: "1.5rem" }}
-            >
-              <AnimatePresence mode="popLayout" initial={false}>
-                <motion.span
-                  key={currentIndex}
-                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
-                  animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
-                  exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
-                  transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
-                  className="text-base text-neutral-200 block"
-                >
-                  {dateDay}
-                </motion.span>
-              </AnimatePresence>
-            </motion.div>
+            {/* Day — hidden on Today */}
+            {!isAtToday && (
+              <motion.div
+                variants={pillItemVariants}
+                layout
+                className="relative overflow-hidden"
+                style={{ height: "1.5rem" }}
+              >
+                <AnimatePresence mode="popLayout" initial={false}>
+                  <motion.span
+                    key={currentIndex}
+                    initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * 18 }}
+                    animate={reducedMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+                    exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: slideDirection.current * -18 }}
+                    transition={reducedMotion ? { duration: 0 } : { type: "spring", stiffness: 400, damping: 28, opacity: { duration: 0.15 } }}
+                    className="text-base text-neutral-200 block"
+                  >
+                    {dateDay}
+                  </motion.span>
+                </AnimatePresence>
+              </motion.div>
+            )}
           </motion.div>
         </motion.div>
 
