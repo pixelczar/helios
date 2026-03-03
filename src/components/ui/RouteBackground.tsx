@@ -26,7 +26,7 @@ const ROUTES = [
 const DRAW_DURATION = 4;
 const FADE_IN_DURATION = 1;
 const HOLD_DURATION = 2;
-const FADE_OUT_DURATION = 2;
+const FADE_OUT_DURATION = 1;
 const ACTIVE_DURATION = DRAW_DURATION + HOLD_DURATION + FADE_OUT_DURATION; // 8s
 const GAP = 1; // breathing room between routes
 const SLOT = ACTIVE_DURATION + GAP; // 9s per route
@@ -36,17 +36,6 @@ const CYCLE = SLOT * ROUTES.length; // 27s full cycle
  * A single animated route path.
  * Uses requestAnimationFrame for the draw-on (dashoffset) and opacity cycling.
  */
-// Opacity gradient: bright at path start → dim near drawing tip → bright tracer dot.
-// Achieved by stacking segments that all start at position 0:
-//   base  (0 → 100% of drawn) at 0.12  — faint everywhere
-//   body1 (0 →  65% of drawn) at 0.50  — medium near start
-//   body2 (0 →  25% of drawn) at 0.50  — very bright at start
-//   tracer (last 3% of drawn) at 1.00  — bright leading dot
-// Composite: start ≈ 1.0, mid ≈ 0.6, far ≈ 0.12, tracer = 1.0
-const BASE_OP = 0.12;
-const BODY_OP = 0.50;
-const BODY1_FRAC = 0.65;
-const BODY2_FRAC = 0.25;
 const TRACER_FRAC = 0.03;
 
 function AnimatedRoute({
@@ -62,40 +51,34 @@ function AnimatedRoute({
   delay: number;
   reducedMotion: boolean;
 }) {
-  const baseRef = useRef<SVGPathElement>(null);
-  const body1Ref = useRef<SVGPathElement>(null);
-  const body2Ref = useRef<SVGPathElement>(null);
+  const pathRef = useRef<SVGPathElement>(null);
   const tracerRef = useRef<SVGPathElement>(null);
   const totalLengthRef = useRef<number | null>(null);
 
   const animate = useCallback(
     (time: number) => {
-      const base = baseRef.current;
-      const body1 = body1Ref.current;
-      const body2 = body2Ref.current;
+      const path = pathRef.current;
       const tracer = tracerRef.current;
-      if (!base || !body1 || !body2 || !tracer) return;
+      if (!path || !tracer) return;
 
       if (totalLengthRef.current === null) {
-        totalLengthRef.current = base.getTotalLength();
+        totalLengthRef.current = path.getTotalLength();
       }
       const totalLength = totalLengthRef.current;
+      const tracerLen = totalLength * TRACER_FRAC;
 
       if (reducedMotion) {
-        base.style.strokeDasharray = `${totalLength}`;
-        base.style.strokeDashoffset = "0";
-        base.style.opacity = "0.3";
-        body1.style.opacity = "0";
-        body2.style.opacity = "0";
+        path.style.strokeDasharray = `${totalLength}`;
+        path.style.strokeDashoffset = "0";
+        path.style.opacity = "0.3";
         tracer.style.opacity = "0";
         return;
       }
 
-      // Phase within the full cycle, offset by this route's slot
       const t = ((time / 1000 - delay) % CYCLE + CYCLE) % CYCLE;
 
       let opacity: number;
-      let progress: number; // 0 = fully hidden, 1 = fully drawn
+      let progress: number;
 
       if (t < DRAW_DURATION) {
         const drawT = t / DRAW_DURATION;
@@ -115,49 +98,25 @@ function AnimatedRoute({
         opacity = 0;
       }
 
+      // Path draws on via dashoffset
+      path.style.strokeDasharray = `${totalLength}`;
+      path.style.strokeDashoffset = `${totalLength * (1 - progress)}`;
+      path.style.opacity = `${opacity}`;
+
+      // Tracer: bright dot at leading edge during draw phase
       const drawnLen = progress * totalLength;
-      const tracerLen = totalLength * TRACER_FRAC;
-
-      // Smooth blend: gradient → uniform as draw finishes (no pop)
-      const blend = progress < 0.75 ? 0 : Math.pow((progress - 0.75) / 0.25, 2);
-
-      // Base: full drawn portion, ramps from faint → full
-      const baseOp = opacity * (BASE_OP + (1 - BASE_OP) * blend);
-      base.style.strokeDasharray = `${drawnLen} ${totalLength}`;
-      base.style.strokeDashoffset = "0";
-      base.style.opacity = `${baseOp}`;
-
-      // Body layers & tracer: fade out as blend → 1 (gradient dissolves to uniform)
-      const layerScale = opacity * (1 - blend);
-
-      if (layerScale > 0.001 && drawnLen > 0.5) {
-        // Body1: start → 65% of drawn
-        const b1 = drawnLen * BODY1_FRAC;
-        body1.style.strokeDasharray = `${b1} ${totalLength}`;
-        body1.style.strokeDashoffset = "0";
-        body1.style.opacity = `${BODY_OP * layerScale}`;
-
-        // Body2: start → 25% of drawn
-        const b2 = drawnLen * BODY2_FRAC;
-        body2.style.strokeDasharray = `${b2} ${totalLength}`;
-        body2.style.strokeDashoffset = "0";
-        body2.style.opacity = `${BODY_OP * layerScale}`;
-
-        // Tracer: bright dot at leading edge
+      if (t < DRAW_DURATION && drawnLen > 0.5) {
         const visTr = Math.min(tracerLen, drawnLen);
         tracer.style.strokeDasharray = `${visTr} ${totalLength}`;
         tracer.style.strokeDashoffset = `${visTr - drawnLen}`;
-        tracer.style.opacity = `${layerScale}`;
+        tracer.style.opacity = `${opacity}`;
       } else {
-        body1.style.opacity = "0";
-        body2.style.opacity = "0";
         tracer.style.opacity = "0";
       }
     },
     [delay, reducedMotion]
   );
 
-  // Store animate in a ref so the rAF loop always calls the latest version
   const animateRef = useRef(animate);
   animateRef.current = animate;
 
@@ -176,22 +135,28 @@ function AnimatedRoute({
     return () => cancelAnimationFrame(rafId);
   }, [reducedMotion]);
 
-  const pathProps = {
-    d,
-    fill: "none" as const,
-    stroke: color,
-    strokeWidth,
-    strokeLinecap: "round" as const,
-    strokeLinejoin: "round" as const,
-    opacity: 0,
-  };
-
   return (
     <g>
-      <path ref={baseRef} {...pathProps} />
-      <path ref={body1Ref} {...pathProps} />
-      <path ref={body2Ref} {...pathProps} />
-      <path ref={tracerRef} {...pathProps} />
+      <path
+        ref={pathRef}
+        d={d}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0}
+      />
+      <path
+        ref={tracerRef}
+        d={d}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={0}
+      />
     </g>
   );
 }
@@ -210,7 +175,7 @@ export function RouteBackground() {
       {/* Ambient layer — medium blur creates color wash */}
       <div
         className="absolute inset-0"
-        style={{ filter: "blur(16px)", opacity: 0.7 }}
+        style={{ filter: "blur(16px)", opacity: 0.5 }}
       >
         <svg
           viewBox="0 0 800 800"
