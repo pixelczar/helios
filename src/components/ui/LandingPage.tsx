@@ -80,7 +80,7 @@ export function LandingPage() {
           </motion.p> */}
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-4">
           <motion.a
             variants={itemVariants(2, reducedMotion)}
             href="/api/auth/strava"
