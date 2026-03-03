@@ -8,7 +8,8 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-const siteUrl = process.env.NEXT_PUBLIC_BASE_URL ?? "https://helios.run";
+const siteUrl =
+  process.env.NEXT_PUBLIC_BASE_URL ?? "https://helios.pixelczar.com";
 
 export const metadata: Metadata = {
   title: {
