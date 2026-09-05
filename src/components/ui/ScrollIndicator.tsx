@@ -11,14 +11,12 @@ const AHEAD_COLOR = "#00ffcc";
 const BEHIND_COLOR = "#ff8844";
 const NEUTRAL_COLOR = "#555555";
 
-// Dramatic ease-in-out-circ falloff for the tick hover effect — flat at the
-// extremes with a steep transition, so growth snaps up near the cursor and
-// drops off sharply, rather than ramping evenly.
-function easeInOutCirc(x: number): number {
+// Sharp falloff for the tick growth — a convex (quartic) curve so only the
+// ticks right at the active dot / cursor grow large, dropping off fast as
+// you move away. (An ease-in-out curve here read as "samey" near the peak.)
+function sharpFalloff(x: number): number {
   const v = Math.max(0, Math.min(1, x));
-  return v < 0.5
-    ? (1 - Math.sqrt(1 - Math.pow(2 * v, 2))) / 2
-    : (Math.sqrt(1 - Math.pow(-2 * v + 2, 2)) + 1) / 2;
+  return v * v * v * v;
 }
 
 function buildMask(progress: number, t: number): string {
@@ -219,7 +217,7 @@ export function ScrollIndicator() {
       // "hovered" look (constant width, bright mask) so it matches the solid
       // tick marks instead of dimming/narrowing when not hovered.
       if (paceTrackRef.current) {
-        paceTrackRef.current.style.width = `6px`;
+        paceTrackRef.current.style.width = `4px`;
         const mask = buildMask(progress, 1);
         paceTrackRef.current.style.maskImage = mask;
         paceTrackRef.current.style.webkitMaskImage = mask;
@@ -300,7 +298,7 @@ export function ScrollIndicator() {
             // top), run through the dramatic ease so the active/traveling dot
             // grows nearby ticks as boldly as hover does.
             const dist = Math.abs(positions[i] - dotPos);
-            const proximity = easeInOutCirc(Math.max(0, 1 - dist / 0.09));
+            const proximity = sharpFalloff(Math.max(0, 1 - dist / 0.09));
 
             // Hover proximity: how close is this tick to the mouse pointer —
             // a wide radius so ticks start reacting well before the cursor is
@@ -309,7 +307,7 @@ export function ScrollIndicator() {
             const hoverRaw = hoverPos !== null
               ? Math.max(0, 1 - Math.abs(positions[i] - hoverPos) / 0.22)
               : 0;
-            const hoverProximity = easeInOutCirc(hoverRaw);
+            const hoverProximity = sharpFalloff(hoverRaw);
 
             // Combined proximity — take the stronger of active-dot or hover.
             // Both drive the same large growth so a clicked/traveling tick
@@ -512,7 +510,7 @@ export function ScrollIndicator() {
           }
         }}
         style={{ transform: "scaleY(-1)" }}
-        className={`absolute right-1/2 -bottom-6 text-[11px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-200 cursor-pointer ${
+        className={`absolute right-1/2 -bottom-12 text-[11px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-200 cursor-pointer ${
           currentIndex >= totalRuns
             ? "text-neutral-200"
             : "text-neutral-600 hover:text-neutral-400"
@@ -526,7 +524,7 @@ export function ScrollIndicator() {
 
       {/* Base track — subtle, barely-there line with sharp (square) ends.
           Matches the pace track's width so they align. */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-[6px] h-full bg-white/4 z-0" />
+      <div className="absolute left-1/2 -translate-x-1/2 w-[4px] h-full bg-white/4 z-0" />
 
       {/* Trail canvas — fading wake particles behind the dot */}
       <canvas
@@ -539,7 +537,7 @@ export function ScrollIndicator() {
       <div
         ref={paceTrackRef}
         className="absolute left-1/2 -translate-x-1/2 h-full overflow-hidden z-1"
-        style={{ width: "6px", willChange: "width" }}
+        style={{ width: "4px", willChange: "width" }}
       >
         <svg
           width="3"

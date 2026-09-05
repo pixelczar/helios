@@ -341,9 +341,14 @@ function RecentRunTile({
   const drawDelay = 1.2 + index * 0.14;
 
   return (
-    <div className="relative w-44 md:w-52 rounded-2xl border border-white/5 bg-black/35 backdrop-blur-2xl overflow-hidden p-6 flex flex-col items-center gap-5">
-      {/* Minimap — centered top row, larger and colored, with a tracer that
-          loops around the route (matching the base landing animation) */}
+    <div className="relative w-44 md:w-52 rounded-2xl border border-white/5 bg-black/35 backdrop-blur-2xl overflow-hidden p-5 flex flex-col items-center gap-4">
+      {/* Date — top of the card */}
+      <span className="text-xs font-mono uppercase tracking-[0.2em] text-neutral-500">
+        {dateLabel}
+      </span>
+
+      {/* Minimap — larger and more visible, with a tracer that loops around
+          the route (matching the base landing animation) */}
       <div className="w-full flex justify-center">
         {route && route.normalized.length > 1 ? (
           <CardRouteTrace
@@ -353,33 +358,28 @@ function RecentRunTile({
             reducedMotion={reducedMotion}
           />
         ) : (
-          <div className="h-24 md:h-28" />
+          <div className="h-28 md:h-32" />
         )}
       </div>
 
       {/* Mileage — the hero of the card */}
-      <div className="flex flex-col items-center gap-2">
-        <span className="text-5xl md:text-6xl font-black italic tracking-tighter text-foreground leading-none">
-          {formatDistance(run.distance)}
-          <span className="text-sm text-neutral-500 ml-1.5 font-normal not-italic tracking-wide">
-            mi
-          </span>
+      <span className="text-5xl md:text-6xl font-black italic tracking-tighter text-foreground leading-none">
+        {formatDistance(run.distance)}
+        <span className="text-sm text-neutral-500 ml-1.5 font-normal not-italic tracking-wide">
+          mi
         </span>
-        <span className="text-xs font-mono uppercase tracking-[0.2em] text-neutral-500">
-          {dateLabel}
-        </span>
-      </div>
+      </span>
 
-      {/* Photo thumbnails — a tasteful max of two, kept clean and white */}
+      {/* Photo thumbnails — max of two, split 50/50 across the row, borderless */}
       {thumbs.length > 0 && (
-        <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-2 w-full">
           {thumbs.map((photo) => {
             const url = photo.urls?.["600"] || Object.values(photo.urls)[0];
             if (!url) return null;
             return (
               <div
                 key={photo.unique_id}
-                className="w-12 h-12 rounded-md overflow-hidden border border-white/80"
+                className="aspect-square w-full rounded-md overflow-hidden"
               >
                 <img
                   src={url}
@@ -424,14 +424,14 @@ function CardRouteTrace({
     <svg
       viewBox="-2.9 -2.9 5.8 5.8"
       preserveAspectRatio="xMidYMid meet"
-      className="w-full h-24 md:h-28"
+      className="w-full h-28 md:h-32"
       aria-hidden="true"
     >
-      {/* Base route — draws itself in once, then holds faint (dimmer so the
-          tracer reads as the prominent element) */}
+      {/* Base route — draws itself in once, then holds (visible enough to
+          read the shape, still quieter than the tracer) */}
       <motion.polyline
         {...shared}
-        opacity={0.22}
+        opacity={0.32}
         initial={reducedMotion ? { pathLength: 1 } : { pathLength: 0 }}
         animate={{ pathLength: 1 }}
         transition={{
@@ -445,7 +445,7 @@ function CardRouteTrace({
       {!reducedMotion && (
         <motion.polyline
           {...shared}
-          strokeWidth={0.32}
+          strokeWidth={0.22}
           style={{ filter: `drop-shadow(0 0 3px ${color})` }}
           initial={{ pathLength: 0.08, pathSpacing: 1, pathOffset: 0 }}
           animate={{ pathOffset: [0, 1] }}
