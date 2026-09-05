@@ -1,12 +1,17 @@
 /**
  * Fetches CartoDB Dark Matter tiles and composites them onto a canvas.
- * Free, no API key required.
+ * CARTO now requires an API key on basemaps.cartocdn.com — without it,
+ * tiles come back stamped with an "API KEY REQUIRED" watermark. The key
+ * is read from NEXT_PUBLIC_CARTO_API_KEY (public: tiles are fetched in
+ * the browser).
  */
 
 import { chooseBestZoom, getTileCoverage, type TileCoverage } from "./tiles";
 
 const TILE_SIZE = 256;
 const TILE_URL = "https://basemaps.cartocdn.com/dark_nolabels";
+const CARTO_API_KEY = process.env.NEXT_PUBLIC_CARTO_API_KEY ?? "";
+const KEY_PARAM = CARTO_API_KEY ? `?key=${CARTO_API_KEY}` : "";
 
 // LRU cache — keyed by activityId
 const cache = new Map<number, { canvas: HTMLCanvasElement; coverage: TileCoverage }>();
@@ -35,7 +40,7 @@ function fetchTileImage(z: number, x: number, y: number): Promise<HTMLImageEleme
       img.crossOrigin = "anonymous";
       img.onload = () => { activeTileFetches--; drainTileQueue(); resolve(img); };
       img.onerror = () => { activeTileFetches--; drainTileQueue(); reject(new Error("tile load failed")); };
-      img.src = `${TILE_URL}/${z}/${x}/${y}@2x.png`;
+      img.src = `${TILE_URL}/${z}/${x}/${y}@2x.png${KEY_PARAM}`;
     };
 
     if (activeTileFetches < MAX_CONCURRENT_TILES) {

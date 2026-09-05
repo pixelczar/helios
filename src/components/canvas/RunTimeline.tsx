@@ -36,6 +36,13 @@ export function RunTimeline() {
   // Track whether a programmatic snap is in progress so we don't re-trigger
   const snapping = useRef(false);
 
+  // Scroll direction is inverted (see wheel handler below) to match the
+  // flipped timeline indicator: Today is the default view, scrolling down
+  // moves back through history toward the oldest run. Only set the initial
+  // position once — later re-runs (e.g. more activities loading in) must
+  // not yank the user back to Today.
+  const initializedScroll = useRef(false);
+
   const scrollToIndex = useCallback(
     (index: number) => {
       if (totalSlots <= 0) return;
@@ -53,6 +60,34 @@ export function RunTimeline() {
   useEffect(() => {
     const el = scroll.el;
     if (!el || totalSlots <= 0) return;
+
+    // Default to Today on first load — matches the indicator, which now
+    // shows Today at the top and the oldest run at the bottom. drei's
+    // ScrollControls attaches its own scroll listener ~1-2 frames after
+    // mount and deliberately ignores the very first scroll event (it uses
+    // that event internally for its own 1px setup nudge) — so a scrollTop
+    // assignment made too early is silently dropped and never reaches
+    // scroll.offset. A short delay comfortably outlasts that setup and
+    // lands well inside the app's own loading-screen warmup window, so
+    // there's no visible jump.
+    //
+    // Only flip initializedScroll once the assignment actually runs —
+    // activities can arrive in more than one batch (e.g. streamed/paginated
+    // fetches), which changes totalSlots and re-triggers this effect,
+    // cleaning up (and cancelling) any pending timer from a prior run. If
+    // the flag were set eagerly up front, a cancelled attempt would
+    // permanently skip initialization and leave the app parked on the
+    // oldest run instead of Today.
+    let initTimer = 0;
+    if (!initializedScroll.current) {
+      initTimer = window.setTimeout(() => {
+        const scrollable = el.scrollHeight - el.clientHeight;
+        if (scrollable > 0) {
+          el.scrollTop = scrollable;
+          initializedScroll.current = true;
+        }
+      }, 250);
+    }
 
     let debounceId: number = 0;
     let snapClearId: number = 0;
@@ -98,20 +133,57 @@ export function RunTimeline() {
       }
     };
 
+    // Invert wheel/trackpad scrolling: scrolling down moves toward the
+    // oldest run (scrollTop decreases from its Today-at-max default),
+    // scrolling up moves toward Today. Handled manually (rather than via
+    // CSS) since el is a real scrollable element driving drei's ScrollControls.
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      handleUserInput();
+      const scrollable = el.scrollHeight - el.clientHeight;
+      if (scrollable <= 0) return;
+      el.scrollTop = Math.max(0, Math.min(scrollable, el.scrollTop - e.deltaY));
+    };
+
     el.addEventListener("scroll", handleScroll, { passive: true });
     el.addEventListener("scrollend", handleScrollEnd);
-    el.addEventListener("wheel", handleUserInput, { passive: true });
+    el.addEventListener("wheel", handleWheel, { passive: false });
     el.addEventListener("touchstart", handleUserInput, { passive: true });
 
     return () => {
       el.removeEventListener("scroll", handleScroll);
       el.removeEventListener("scrollend", handleScrollEnd);
-      el.removeEventListener("wheel", handleUserInput);
+      el.removeEventListener("wheel", handleWheel);
       el.removeEventListener("touchstart", handleUserInput);
       clearTimeout(debounceId);
       clearTimeout(snapClearId);
+      clearTimeout(initTimer);
     };
   }, [scroll.el, totalSlots, activities.length]);
+
+  // Arrow-key stepping — Up/Right advance toward Today, Down/Left step
+  // back toward the oldest run, matching the inverted scroll direction.
+  useEffect(() => {
+    if (totalSlots <= 0) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+      let delta = 0;
+      if (e.key === "ArrowUp" || e.key === "ArrowRight") delta = 1;
+      else if (e.key === "ArrowDown" || e.key === "ArrowLeft") delta = -1;
+      else return;
+
+      e.preventDefault();
+      const current = useActivityStore.getState().currentIndex;
+      scrollToIndex(Math.max(0, Math.min(totalSlots, current + delta)));
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [totalSlots, scrollToIndex]);
 
   // Spring state for Z-axis
   const zSpring = useRef({ value: 0, velocity: 0, initialized: false });

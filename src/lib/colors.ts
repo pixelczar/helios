@@ -18,3 +18,15 @@ export function getRouteColor(paceRatio: number): THREE.Color {
 export function getRouteColorHex(paceRatio: number): string {
   return `#${getRouteColor(paceRatio).getHexString()}`;
 }
+
+// Discrete ahead/neutral/behind banding — used anywhere pace needs to read
+// as one of three clear states (scroll indicator ticks/track, run tiles)
+// rather than a continuous blend. Keep in sync with getRouteColor's blend
+// math so a solid-banded UI and a continuously-lerped one never disagree
+// about which side of "on pace" a run falls on.
+export function getPaceBandColor(paceRatio: number): string {
+  const blend = Math.max(0, Math.min(1, (paceRatio - 0.8) / 0.4));
+  if (blend > 0.6) return "#00ffcc";
+  if (blend < 0.4) return "#ff8844";
+  return "#555555";
+}

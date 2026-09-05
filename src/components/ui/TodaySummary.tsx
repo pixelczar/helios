@@ -11,6 +11,9 @@ import {
 import { useSettingsStore } from "@/stores/settingsStore";
 import { fetchMapImage } from "@/lib/geo/mapTiles";
 import { formatDistance } from "@/lib/format";
+import { getPaceBandColor } from "@/lib/colors";
+import { useActivityPhotos } from "@/hooks/useActivityPhotos";
+import type { StravaActivity } from "@/lib/strava/types";
 
 const STAGGER = 0.06;
 const EASE = [0.25, 0.1, 0.25, 1] as const;
@@ -39,6 +42,29 @@ function itemVariants(i: number, reducedMotion: boolean | null) {
       y: -10,
       filter: "blur(4px)",
       transition: { duration: 0.3, delay: i * 0.03, ease: EASE },
+    },
+  };
+}
+
+// Recent-run tiles: a long pause after everything else has settled, then a
+// heavy-overlap cascade — each tile's delay increment (0.14s) is much
+// shorter than its own animation (0.75s), so they visibly pile onto one
+// another rather than finishing one at a time.
+function tileVariants(i: number, reducedMotion: boolean | null) {
+  if (reducedMotion) {
+    return {
+      initial: { opacity: 0 },
+      animate: { opacity: 1, transition: { duration: 0 } },
+    };
+  }
+  return {
+    initial: { opacity: 0, y: 26, scale: 0.94, filter: "blur(8px)" },
+    animate: {
+      opacity: 1,
+      y: 0,
+      scale: 1,
+      filter: "blur(0px)",
+      transition: { duration: 0.75, delay: 1.1 + i * 0.14, ease: EASE },
     },
   };
 }
@@ -129,6 +155,18 @@ export function TodaySummary() {
     () =>
       visibleGoals.map((g) => calculateGoalProgress(g, activities, new Date())),
     [visibleGoals, activities]
+  );
+
+  // Most recent 3 runs, newest first — activities are stored oldest-first.
+  const recentRuns = useMemo(() => activities.slice(-3).reverse(), [activities]);
+  const recentRunRatios = useMemo(
+    () =>
+      recentRuns.map(
+        (run) =>
+          calculateYearlyPaceAtDate(activities, yearlyTarget, new Date(run.start_date_local))
+            .ratio
+      ),
+    [recentRuns, activities, yearlyTarget]
   );
 
   return (
@@ -255,8 +293,172 @@ export function TodaySummary() {
             ))}
           </motion.div>
         )}
+
+        {/* Recent runs — a long beat after everything else, then a heavy
+            overlapping cascade (each tile animates independently) */}
+        {recentRuns.length > 0 && (
+          <div className="flex items-stretch gap-4 mt-24">
+            {recentRuns.map((run, i) => (
+              <motion.div key={run.id} variants={tileVariants(i, reducedMotion)}>
+                <RecentRunTile
+                  run={run}
+                  ratio={recentRunRatios[i]}
+                  index={i}
+                  reducedMotion={reducedMotion}
+                />
+              </motion.div>
+            ))}
+          </div>
+        )}
       </div>
     </motion.div>
+  );
+}
+
+function RecentRunTile({
+  run,
+  ratio,
+  index,
+  reducedMotion,
+}: {
+  run: StravaActivity;
+  ratio: number;
+  index: number;
+  reducedMotion: boolean | null;
+}) {
+  const color = getPaceBandColor(ratio);
+  const decodedRoutes = useActivityStore((s) => s.decodedRoutes);
+  const route = decodedRoutes.get(run.id);
+  const { photos } = useActivityPhotos(run.id, run.total_photo_count);
+  const thumbs = photos.slice(0, 2);
+
+  const dateLabel = new Date(run.start_date_local).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
+
+  // Route draws itself in, staggered to roughly land as the card fades up.
+  const drawDelay = 1.2 + index * 0.14;
+
+  return (
+    <div className="relative w-44 md:w-52 rounded-2xl border border-white/5 bg-black/35 backdrop-blur-2xl overflow-hidden p-6 flex flex-col items-center gap-5">
+      {/* Minimap — centered top row, larger and colored, with a tracer that
+          loops around the route (matching the base landing animation) */}
+      <div className="w-full flex justify-center">
+        {route && route.normalized.length > 1 ? (
+          <CardRouteTrace
+            points={route.normalized.map(([x, y]) => `${x},${-y}`).join(" ")}
+            color={color}
+            drawDelay={drawDelay}
+            reducedMotion={reducedMotion}
+          />
+        ) : (
+          <div className="h-24 md:h-28" />
+        )}
+      </div>
+
+      {/* Mileage — the hero of the card */}
+      <div className="flex flex-col items-center gap-2">
+        <span className="text-5xl md:text-6xl font-black italic tracking-tighter text-foreground leading-none">
+          {formatDistance(run.distance)}
+          <span className="text-sm text-neutral-500 ml-1.5 font-normal not-italic tracking-wide">
+            mi
+          </span>
+        </span>
+        <span className="text-xs font-mono uppercase tracking-[0.2em] text-neutral-500">
+          {dateLabel}
+        </span>
+      </div>
+
+      {/* Photo thumbnails — a tasteful max of two, kept clean and white */}
+      {thumbs.length > 0 && (
+        <div className="flex gap-2">
+          {thumbs.map((photo) => {
+            const url = photo.urls?.["600"] || Object.values(photo.urls)[0];
+            if (!url) return null;
+            return (
+              <div
+                key={photo.unique_id}
+                className="w-12 h-12 rounded-md overflow-hidden border border-white/80"
+              >
+                <img
+                  src={url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A card minimap: the full route drawn in faintly, plus a bright short
+// segment that continuously loops around it — the "tracer" effect. Uses
+// framer-motion's normalized pathLength/pathSpacing/pathOffset so no manual
+// getTotalLength math is needed.
+function CardRouteTrace({
+  points,
+  color,
+  drawDelay,
+  reducedMotion,
+}: {
+  points: string;
+  color: string;
+  drawDelay: number;
+  reducedMotion: boolean | null;
+}) {
+  const shared = {
+    points,
+    fill: "none" as const,
+    stroke: color,
+    strokeWidth: 0.14,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+  };
+
+  return (
+    <svg
+      viewBox="-2.9 -2.9 5.8 5.8"
+      preserveAspectRatio="xMidYMid meet"
+      className="w-full h-24 md:h-28"
+      aria-hidden="true"
+    >
+      {/* Base route — draws itself in once, then holds faint */}
+      <motion.polyline
+        {...shared}
+        opacity={0.4}
+        initial={reducedMotion ? { pathLength: 1 } : { pathLength: 0 }}
+        animate={{ pathLength: 1 }}
+        transition={{
+          duration: reducedMotion ? 0 : 1.4,
+          delay: reducedMotion ? 0 : drawDelay,
+          ease: [0.25, 0.1, 0.25, 1],
+        }}
+      />
+
+      {/* Tracer — a bright short segment looping around the route */}
+      {!reducedMotion && (
+        <motion.polyline
+          {...shared}
+          strokeWidth={0.22}
+          style={{ filter: `drop-shadow(0 0 2.5px ${color})` }}
+          initial={{ pathLength: 0.14, pathSpacing: 1, pathOffset: 0 }}
+          animate={{ pathOffset: [0, 1] }}
+          transition={{
+            pathOffset: {
+              duration: 2.6,
+              repeat: Infinity,
+              ease: "linear",
+              delay: drawDelay + 1.2,
+            },
+          }}
+        />
+      )}
+    </svg>
   );
 }
 

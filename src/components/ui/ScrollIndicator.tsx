@@ -4,18 +4,32 @@ import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
-import { getRouteColorHex } from "@/lib/colors";
+import { getPaceBandColor } from "@/lib/colors";
 import { lockSnap } from "@/lib/scrollLock";
 
 const AHEAD_COLOR = "#00ffcc";
 const BEHIND_COLOR = "#ff8844";
 const NEUTRAL_COLOR = "#555555";
 
+// Non-linear falloff for the tick hover effect — eases in and out instead
+// of ramping linearly, so a tick's growth reads as a curve, not a ramp.
+function smoothstep(x: number): number {
+  const v = Math.max(0, Math.min(1, x));
+  return v * v * (3 - 2 * v);
+}
+
 function buildMask(progress: number, t: number): string {
   const p = progress * 100;
-  const spread = 20 + t * 80;
+  const spread = 30 + t * 110;
   const edge = 0.05 + t * 0.65;
   return `linear-gradient(to bottom,rgba(255,255,255,${edge}) 0%,rgba(255,255,255,${edge}) ${Math.max(0, p - spread)}%,rgba(255,255,255,1) ${Math.max(0, p - 5)}%,rgba(255,255,255,1) ${Math.min(100, p + 5)}%,rgba(255,255,255,${edge}) ${Math.min(100, p + spread)}%,rgba(255,255,255,${edge}) 100%)`;
+}
+
+// The dot/label/ghost span the full height of the track — clamped only to
+// the valid 0-1 range, never inset from the ends. (An earlier inset here
+// was making the active dot top out around the middle 93% of the track.)
+function clampEdge(p: number): number {
+  return Math.min(1, Math.max(0, p));
 }
 
 // Velocity-aware spring — overshoots then settles
@@ -75,7 +89,9 @@ export function ScrollIndicator() {
   const totalRuns = activities.length;
   const discreteProgress = totalRuns > 1 ? currentIndex / (totalRuns - 1) : 0;
 
-  // Day-of-year timeline: top = day 1, bottom = today
+  // Day-of-year timeline. Internally 0 = day 1 (oldest), 1 = today.
+  // The track is visually flipped with scaleY(-1) so today renders at the
+  // top and the oldest run at the bottom; text labels are counter-flipped.
   const todayDayOfYear = useMemo(() => {
     const now = new Date();
     const startOfYear = new Date(now.getFullYear(), 0, 0);
@@ -85,6 +101,9 @@ export function ScrollIndicator() {
   // Day positions for each activity (fractional 0-1 on the year timeline)
   const dayPositionsRef = useRef<number[]>([]);
   const ratiosRef = useRef<number[]>([]);
+  // Per-tick length spring — a light touch of overshoot as ticks grow/shrink,
+  // indexed to match dayPositionsRef; entries are created lazily.
+  const tickSpringsRef = useRef<{ value: number; velocity: number }[]>([]);
 
   useEffect(() => {
     hoverTarget.current = hovered ? 1 : 0;
@@ -164,37 +183,37 @@ export function ScrollIndicator() {
       hoverT.current = Math.abs(next - target) < 0.001 ? target : next;
       const t = hoverT.current;
 
-      // Spring-based delayed dot — higher damping for less overshoot
-      const dotSpring = springLerp(delayedProgress.current, progress, dotVelocity.current, 12, 6, dt);
+      // Spring-based delayed dot — underdamped for a springy overshoot
+      const dotSpring = springLerp(delayedProgress.current, progress, dotVelocity.current, 20, 4.5, dt);
       delayedProgress.current = dotSpring.value;
       dotVelocity.current = dotSpring.velocity;
 
-      // Ghost trail — softer spring, more lag
-      const ghostSpring = springLerp(ghostProgress.current, progress, ghostVelocity.current, 6, 4, dt);
+      // Ghost trail — softer spring, much more lag
+      const ghostSpring = springLerp(ghostProgress.current, progress, ghostVelocity.current, 4, 2.5, dt);
       ghostProgress.current = ghostSpring.value;
       ghostVelocity.current = ghostSpring.velocity;
 
       // Track trail history — sample when moving
       if (scrollDelta > 0.0005) {
         trailHistory.current.push({ pos: delayedProgress.current, age: 0 });
-        if (trailHistory.current.length > 12) trailHistory.current.shift();
+        if (trailHistory.current.length > 24) trailHistory.current.shift();
       }
       // Age and cull trail
       for (let i = trailHistory.current.length - 1; i >= 0; i--) {
         trailHistory.current[i].age += dt;
-        if (trailHistory.current[i].age > 0.4) {
+        if (trailHistory.current[i].age > 0.6) {
           trailHistory.current.splice(i, 1);
         }
       }
 
       // Pulse phase for breathing glow (skip when reduced motion)
       if (!reducedMotion) {
-        pulsePhase.current += dt * 2.5;
+        pulsePhase.current += dt * 3.5;
       }
 
       // Track width + mask — driven by INSTANT scroll progress
       if (paceTrackRef.current) {
-        const w = 1.5 + t * 1.5;
+        const w = 3 + t * 3;
         paceTrackRef.current.style.width = `${w}px`;
         const mask = buildMask(progress, t);
         paceTrackRef.current.style.maskImage = mask;
@@ -203,37 +222,37 @@ export function ScrollIndicator() {
 
       // Dot velocity magnitude for dynamic glow intensity
       const speed = Math.abs(dotVelocity.current);
-      const speedBoost = Math.min(speed * 3, 1);
+      const speedBoost = Math.min(speed * 6, 1);
 
       // Breathing glow — pulses gently at rest, intensifies when moving
       const breathe = Math.sin(pulsePhase.current) * 0.5 + 0.5;
       if (glowRef.current) {
-        const baseSize = 28 + t * 12;
-        const s = baseSize + speedBoost * 16 + breathe * 4;
+        const baseSize = 28 + t * 22;
+        const s = baseSize + speedBoost * 30 + breathe * 8;
         glowRef.current.style.width = `${s}px`;
         glowRef.current.style.height = `${s}px`;
-        glowRef.current.style.opacity = `${0.25 + t * 0.2 + speedBoost * 0.35 + breathe * 0.05}`;
+        glowRef.current.style.opacity = `${0.25 + t * 0.25 + speedBoost * 0.45 + breathe * 0.08}`;
       }
 
-      // Dot core — scales up slightly when moving fast
+      // Dot core — scales up when moving fast
       if (dotCoreRef.current) {
-        const scale = 1 + speedBoost * 0.3 + t * 0.15;
+        const scale = 1 + speedBoost * 0.55 + t * 0.25;
         dotCoreRef.current.style.scale = `${scale}`;
       }
 
       // Dot position — DELAYED, trails the gradient
       if (dotRef.current) {
-        dotRef.current.style.top = `${delayedProgress.current * 100}%`;
+        dotRef.current.style.top = `${clampEdge(delayedProgress.current) * 100}%`;
       }
 
       // Label position — follows the delayed dot smoothly
       if (labelRef.current) {
-        labelRef.current.style.top = `${delayedProgress.current * 100}%`;
+        labelRef.current.style.top = `${clampEdge(delayedProgress.current) * 100}%`;
       }
 
       // Ghost — fainter, even more delayed
       if (ghostRef.current) {
-        ghostRef.current.style.top = `${ghostProgress.current * 100}%`;
+        ghostRef.current.style.top = `${clampEdge(ghostProgress.current) * 100}%`;
         const ghostOpacity = Math.min(scrollDelta * 400, 0.3) + speed * 0.15;
         ghostRef.current.style.opacity = `${Math.min(ghostOpacity, 0.35)}`;
       }
@@ -245,7 +264,7 @@ export function ScrollIndicator() {
         if (ctx) {
           // Scale canvas buffer for retina crispness
           const dpr = window.devicePixelRatio || 1;
-          const cssW = 40;
+          const cssW = 140; // wide enough for ticks to reach either side without clipping
           const cssH = canvas.clientHeight || 400;
           const bufW = Math.round(cssW * dpr);
           const bufH = Math.round(cssH * dpr);
@@ -260,7 +279,8 @@ export function ScrollIndicator() {
           const h = cssH;
           const cx = cssW / 2;
 
-          // Activity tick marks — horizontal lines that grow left near the active dot
+          // Activity tick marks — horizontal lines that grow near the active dot,
+          // and reach out toward the cursor's side when hover-proximate.
           const curIdx = useActivityStore.getState().currentIndex;
           const ratios = ratiosRef.current;
           const dotPos = delayedProgress.current; // spring-delayed position
@@ -269,43 +289,62 @@ export function ScrollIndicator() {
           for (let i = 0; i < positions.length; i++) {
             const y = positions[i] * h;
             const isCurrent = i === curIdx;
-            const color = ratios[i] !== undefined ? getRouteColorHex(ratios[i]) : "#ffffff";
+            const color = ratios[i] !== undefined ? getPaceBandColor(ratios[i]) : "#ffffff";
 
             // Proximity: how close is this tick to the active dot (0-1, 1 = on top)
             const dist = Math.abs(positions[i] - dotPos);
             const proximity = Math.max(0, 1 - dist / 0.08);
 
-            // Hover proximity: how close is this tick to the mouse pointer
-            const hoverProximity = hoverPos !== null
-              ? Math.max(0, 1 - Math.abs(positions[i] - hoverPos) / 0.06)
+            // Hover proximity: how close is this tick to the mouse pointer —
+            // a wide radius so ticks start reacting well before the cursor
+            // is precisely on top of one, with a non-linear (smoothstep)
+            // falloff so the growth reads as a curve rather than a ramp.
+            const hoverRaw = hoverPos !== null
+              ? Math.max(0, 1 - Math.abs(positions[i] - hoverPos) / 0.18)
               : 0;
+            const hoverProximity = smoothstep(hoverRaw);
 
             // Combined proximity — take the stronger of active-dot or hover
             const effectiveProximity = Math.max(proximity, hoverProximity);
 
-            // Base tick length + proximity growth
-            const baseLen = 5 + t * 2;
-            const growLen = effectiveProximity * (10 + t * 4);
-            const tickLen = baseLen + growLen;
+            // Base tick length + proximity growth, plus an extra reach
+            // when the cursor itself is what's driving this tick's growth.
+            // Ticks always grow left (toward the label) — never cross to
+            // the other side of the line.
+            const baseLen = 9 + t * 4;
+            const growLen = effectiveProximity * (18 + t * 8);
+            const hoverReach = hoverProximity > proximity ? hoverProximity * (14 + t * 8) : 0;
+            const targetLen = baseLen + growLen + hoverReach;
 
-            const alpha = isCurrent ? 1.0 : 0.55 + effectiveProximity * 0.35 + t * 0.1;
-            const lineW = isCurrent ? 1.5 : 1 + hoverProximity * 0.5;
+            // A light touch of spring on the tick's length so it doesn't
+            // snap instantly to its target — just the slightest overshoot.
+            if (!tickSpringsRef.current[i]) {
+              tickSpringsRef.current[i] = { value: targetLen, velocity: 0 };
+            }
+            const tickSpring = tickSpringsRef.current[i];
+            const springed = springLerp(tickSpring.value, targetLen, tickSpring.velocity, 140, 16, dt);
+            tickSpring.value = springed.value;
+            tickSpring.velocity = springed.velocity;
+            const tickLen = tickSpring.value;
+
+            // Ticks are fully opaque and the same solid color whether hovered
+            // or not — hover feedback is length + width only. (Semi-transparent
+            // ticks blended visibly where they overlapped at the dot.)
+            const lineW = isCurrent ? 3 : 2 + hoverProximity * 1;
 
             ctx.beginPath();
             ctx.moveTo(anchorX, y);
             ctx.lineTo(anchorX - tickLen, y);
             ctx.strokeStyle = color;
-            ctx.globalAlpha = alpha;
             ctx.lineWidth = lineW;
-            ctx.lineCap = "round";
+            ctx.lineCap = "butt";
             ctx.stroke();
-            ctx.globalAlpha = 1;
           }
 
           // Trail wake particles
           for (const point of trailHistory.current) {
-            const alpha = Math.max(0, 1 - point.age / 0.4) * 0.4;
-            const radius = 2 * (1 - point.age / 0.4);
+            const alpha = Math.max(0, 1 - point.age / 0.6) * 0.45;
+            const radius = 3 * (1 - point.age / 0.6);
             const y = point.pos * h;
             ctx.beginPath();
             ctx.arc(cx, y, Math.max(0.5, radius), 0, Math.PI * 2);
@@ -373,7 +412,8 @@ export function ScrollIndicator() {
     (clientY: number) => {
       if (!trackRef.current) return;
       const rect = trackRef.current.getBoundingClientRect();
-      const clickT = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+      // Track is flipped (scaleY(-1)): invert screen position to internal 0-1.
+      const clickT = 1 - Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
       // Reverse-map: click position (day-based) → closest activity → scroll position
       const positions = dayPositionsRef.current;
       const container = findScrollContainer();
@@ -411,7 +451,8 @@ export function ScrollIndicator() {
       // Always track mouse position for pip hover effects
       if (trackRef.current) {
         const rect = trackRef.current.getBoundingClientRect();
-        hoveredProgress.current = Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
+        // Track is flipped (scaleY(-1)): invert screen position to internal 0-1.
+        hoveredProgress.current = 1 - Math.max(0, Math.min(1, (e.clientY - rect.top) / rect.height));
       }
       if (!isDragging.current) return;
       e.preventDefault();
@@ -428,13 +469,14 @@ export function ScrollIndicator() {
   if (totalRuns === 0) return null;
 
   const currentColor = paceData[currentIndex]
-    ? getRouteColorHex(paceData[currentIndex].ratio)
+    ? getPaceBandColor(paceData[currentIndex].ratio)
     : BEHIND_COLOR;
 
   return (
     <div
       ref={trackRef}
-      className="absolute right-4 top-[65%] -translate-y-1/2 h-[30vh] md:top-1/2 md:h-[40vh] w-6 md:w-8 pointer-events-auto cursor-pointer flex items-center justify-center select-none"
+      className="absolute right-4 top-1/2 h-[80vh] w-10 md:w-14 pointer-events-auto cursor-pointer flex items-center justify-center select-none"
+      style={{ transform: "translateY(-50%) scaleY(-1)" }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -463,7 +505,8 @@ export function ScrollIndicator() {
             container.scrollTo({ top: scrollable, behavior: "instant" });
           }
         }}
-        className={`absolute left-1/2 -translate-x-1/2 -bottom-6 text-[11px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-200 cursor-pointer ${
+        style={{ transform: "scaleY(-1)" }}
+        className={`absolute right-1/2 -bottom-6 text-[11px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-200 cursor-pointer ${
           currentIndex >= totalRuns
             ? "text-neutral-200"
             : "text-neutral-600 hover:text-neutral-400"
@@ -471,25 +514,25 @@ export function ScrollIndicator() {
       >
         Today
         {currentIndex >= totalRuns && (
-          <div className="absolute left-1/2 -translate-x-1/2 -bottom-1.5 w-1 h-1 rounded-full bg-neutral-200" />
+          <div className="absolute right-0 -bottom-1.5 w-1 h-1 rounded-full bg-neutral-200" />
         )}
       </button>
 
-      {/* Base track — subtle, barely-there line */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-[1.5px] h-full bg-white/4 rounded-full z-0" />
+      {/* Base track — subtle, barely-there line with sharp (square) ends */}
+      <div className="absolute left-1/2 -translate-x-1/2 w-[3px] h-full bg-white/4 z-0" />
 
       {/* Trail canvas — fading wake particles behind the dot */}
       <canvas
         ref={trailCanvasRef}
         className="absolute left-1/2 -translate-x-1/2 h-full pointer-events-none z-2"
-        style={{ width: "40px" }}
+        style={{ width: "140px" }}
       />
 
       {/* Colored pace track — width + mask interpolated by rAF */}
       <div
         ref={paceTrackRef}
-        className="absolute left-1/2 -translate-x-1/2 h-full rounded-full overflow-hidden z-1"
-        style={{ width: "1.5px", willChange: "width" }}
+        className="absolute left-1/2 -translate-x-1/2 h-full overflow-hidden z-1"
+        style={{ width: "3px", willChange: "width" }}
       >
         <svg
           width="3"
@@ -533,16 +576,16 @@ export function ScrollIndicator() {
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: "18px",
-            height: "18px",
+            width: "26px",
+            height: "26px",
             background: `radial-gradient(circle, ${currentColor}40 0%, transparent 70%)`,
           }}
         />
         <div
           className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
           style={{
-            width: "5px",
-            height: "5px",
+            width: "6px",
+            height: "6px",
             backgroundColor: currentColor,
             opacity: 0.3,
           }}
@@ -553,8 +596,8 @@ export function ScrollIndicator() {
       {paceData[currentIndex] && (
         <div
           ref={labelRef}
-          className="absolute right-10 whitespace-nowrap -translate-y-1/2 hidden md:flex items-center gap-2 italic"
-          style={{ top: "0%" }}
+          className="absolute right-16 md:right-24 whitespace-nowrap hidden md:flex items-center gap-2 italic"
+          style={{ top: "0%", transform: "translateY(-50%) scaleY(-1)" }}
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -567,10 +610,14 @@ export function ScrollIndicator() {
               <motion.span
                 variants={{
                   initial: { opacity: 0, y: 6, filter: "blur(3px)" },
-                  animate: { opacity: 0.5, y: 0, filter: "blur(0px)", transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
+                  animate: { opacity: 0.85, y: 0, filter: "blur(0px)", transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
                   exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } },
                 }}
                 className="text-base font-medium tabular-nums tracking-wide"
+                style={{
+                  color: currentColor,
+                  textShadow: `0 0 12px ${currentColor}50`,
+                }}
               >
                 Day {paceData[currentIndex].dayOfYear}
               </motion.span>
