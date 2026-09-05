@@ -11,11 +11,14 @@ const AHEAD_COLOR = "#00ffcc";
 const BEHIND_COLOR = "#ff8844";
 const NEUTRAL_COLOR = "#555555";
 
-// Non-linear falloff for the tick hover effect — eases in and out instead
-// of ramping linearly, so a tick's growth reads as a curve, not a ramp.
-function smoothstep(x: number): number {
+// Dramatic ease-in-out-circ falloff for the tick hover effect — flat at the
+// extremes with a steep transition, so growth snaps up near the cursor and
+// drops off sharply, rather than ramping evenly.
+function easeInOutCirc(x: number): number {
   const v = Math.max(0, Math.min(1, x));
-  return v * v * (3 - 2 * v);
+  return v < 0.5
+    ? (1 - Math.sqrt(1 - Math.pow(2 * v, 2))) / 2
+    : (Math.sqrt(1 - Math.pow(-2 * v + 2, 2)) + 1) / 2;
 }
 
 function buildMask(progress: number, t: number): string {
@@ -175,10 +178,11 @@ export function ScrollIndicator() {
       const scrollDelta = Math.abs(progress - prevScrollProgress.current);
       prevScrollProgress.current = progress;
 
-      // Hover interpolation (frame-rate independent)
+      // Hover interpolation (frame-rate independent) — fast ramp so the
+      // hover growth feels immediate, not delayed.
       const target = hoverTarget.current;
       const current = hoverT.current;
-      const factor = 1 - Math.pow(0.92, dt * 60);
+      const factor = 1 - Math.pow(0.35, dt * 60);
       const next = current + (target - current) * factor;
       hoverT.current = Math.abs(next - target) < 0.001 ? target : next;
       const t = hoverT.current;
@@ -211,11 +215,12 @@ export function ScrollIndicator() {
         pulsePhase.current += dt * 3.5;
       }
 
-      // Track width + mask — driven by INSTANT scroll progress
+      // Track width + mask — the vertical line always renders at its full
+      // "hovered" look (constant width, bright mask) so it matches the solid
+      // tick marks instead of dimming/narrowing when not hovered.
       if (paceTrackRef.current) {
-        const w = 3 + t * 3;
-        paceTrackRef.current.style.width = `${w}px`;
-        const mask = buildMask(progress, t);
+        paceTrackRef.current.style.width = `6px`;
+        const mask = buildMask(progress, 1);
         paceTrackRef.current.style.maskImage = mask;
         paceTrackRef.current.style.webkitMaskImage = mask;
       }
@@ -291,38 +296,39 @@ export function ScrollIndicator() {
             const isCurrent = i === curIdx;
             const color = ratios[i] !== undefined ? getPaceBandColor(ratios[i]) : "#ffffff";
 
-            // Proximity: how close is this tick to the active dot (0-1, 1 = on top)
+            // Proximity: how close is this tick to the active dot (0-1, 1 = on
+            // top), run through the dramatic ease so the active/traveling dot
+            // grows nearby ticks as boldly as hover does.
             const dist = Math.abs(positions[i] - dotPos);
-            const proximity = Math.max(0, 1 - dist / 0.08);
+            const proximity = easeInOutCirc(Math.max(0, 1 - dist / 0.09));
 
             // Hover proximity: how close is this tick to the mouse pointer —
-            // a wide radius so ticks start reacting well before the cursor
-            // is precisely on top of one, with a non-linear (smoothstep)
-            // falloff so the growth reads as a curve rather than a ramp.
+            // a wide radius so ticks start reacting well before the cursor is
+            // precisely on top of one, with the same dramatic ease-in-out-circ
+            // falloff (steep transition, flat extremes).
             const hoverRaw = hoverPos !== null
-              ? Math.max(0, 1 - Math.abs(positions[i] - hoverPos) / 0.18)
+              ? Math.max(0, 1 - Math.abs(positions[i] - hoverPos) / 0.22)
               : 0;
-            const hoverProximity = smoothstep(hoverRaw);
+            const hoverProximity = easeInOutCirc(hoverRaw);
 
-            // Combined proximity — take the stronger of active-dot or hover
+            // Combined proximity — take the stronger of active-dot or hover.
+            // Both drive the same large growth so a clicked/traveling tick
+            // reaches out just as far as a hovered one.
             const effectiveProximity = Math.max(proximity, hoverProximity);
 
-            // Base tick length + proximity growth, plus an extra reach
-            // when the cursor itself is what's driving this tick's growth.
-            // Ticks always grow left (toward the label) — never cross to
-            // the other side of the line.
+            // Base tick length + proximity growth. Ticks always grow left
+            // (toward the label) — never cross to the other side of the line.
             const baseLen = 9 + t * 4;
-            const growLen = effectiveProximity * (18 + t * 8);
-            const hoverReach = hoverProximity > proximity ? hoverProximity * (14 + t * 8) : 0;
-            const targetLen = baseLen + growLen + hoverReach;
+            const growLen = effectiveProximity * (42 + t * 12);
+            const targetLen = baseLen + growLen;
 
-            // A light touch of spring on the tick's length so it doesn't
-            // snap instantly to its target — just the slightest overshoot.
+            // Snappy length spring — reaches its target quickly with only a
+            // hint of overshoot, so hover growth feels immediate.
             if (!tickSpringsRef.current[i]) {
               tickSpringsRef.current[i] = { value: targetLen, velocity: 0 };
             }
             const tickSpring = tickSpringsRef.current[i];
-            const springed = springLerp(tickSpring.value, targetLen, tickSpring.velocity, 140, 16, dt);
+            const springed = springLerp(tickSpring.value, targetLen, tickSpring.velocity, 320, 26, dt);
             tickSpring.value = springed.value;
             tickSpring.velocity = springed.velocity;
             const tickLen = tickSpring.value;
@@ -475,7 +481,7 @@ export function ScrollIndicator() {
   return (
     <div
       ref={trackRef}
-      className="absolute right-4 top-1/2 h-[80vh] w-10 md:w-14 pointer-events-auto cursor-pointer flex items-center justify-center select-none"
+      className="absolute right-4 top-1/2 h-[80vh] w-32 md:w-44 pointer-events-auto cursor-pointer select-none"
       style={{ transform: "translateY(-50%) scaleY(-1)" }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -488,10 +494,10 @@ export function ScrollIndicator() {
         if (!isDragging.current) hoverTarget.current = 0;
       }}
     >
-      {/* Year boundary labels */}
-      {/* <div className="absolute left-1/2 -translate-x-1/2 -top-5 text-[9px] font-mono uppercase tracking-widest text-neutral-600 whitespace-nowrap">
-        Day 1
-      </div> */}
+      {/* Inner visual track — pinned to the right of the (much wider) hit
+          area so the timeline itself stays put while the hover zone extends
+          far to the left, making the effect easy to trigger. */}
+      <div className="absolute right-0 top-0 h-full w-8">
       <button
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
@@ -518,8 +524,9 @@ export function ScrollIndicator() {
         )}
       </button>
 
-      {/* Base track — subtle, barely-there line with sharp (square) ends */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-[3px] h-full bg-white/4 z-0" />
+      {/* Base track — subtle, barely-there line with sharp (square) ends.
+          Matches the pace track's width so they align. */}
+      <div className="absolute left-1/2 -translate-x-1/2 w-[6px] h-full bg-white/4 z-0" />
 
       {/* Trail canvas — fading wake particles behind the dot */}
       <canvas
@@ -532,7 +539,7 @@ export function ScrollIndicator() {
       <div
         ref={paceTrackRef}
         className="absolute left-1/2 -translate-x-1/2 h-full overflow-hidden z-1"
-        style={{ width: "3px", willChange: "width" }}
+        style={{ width: "6px", willChange: "width" }}
       >
         <svg
           width="3"
@@ -555,7 +562,7 @@ export function ScrollIndicator() {
                           ? BEHIND_COLOR
                           : NEUTRAL_COLOR
                     }
-                    stopOpacity={0.9}
+                    stopOpacity={1}
                   />
                 ))
               ) : (
@@ -680,6 +687,7 @@ export function ScrollIndicator() {
             willChange: "transform",
           }}
         />
+      </div>
       </div>
     </div>
   );

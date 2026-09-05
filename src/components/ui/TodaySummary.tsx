@@ -415,7 +415,7 @@ function CardRouteTrace({
     points,
     fill: "none" as const,
     stroke: color,
-    strokeWidth: 0.14,
+    strokeWidth: 0.11,
     strokeLinecap: "round" as const,
     strokeLinejoin: "round" as const,
   };
@@ -427,10 +427,11 @@ function CardRouteTrace({
       className="w-full h-24 md:h-28"
       aria-hidden="true"
     >
-      {/* Base route — draws itself in once, then holds faint */}
+      {/* Base route — draws itself in once, then holds faint (dimmer so the
+          tracer reads as the prominent element) */}
       <motion.polyline
         {...shared}
-        opacity={0.4}
+        opacity={0.22}
         initial={reducedMotion ? { pathLength: 1 } : { pathLength: 0 }}
         animate={{ pathLength: 1 }}
         transition={{
@@ -444,9 +445,9 @@ function CardRouteTrace({
       {!reducedMotion && (
         <motion.polyline
           {...shared}
-          strokeWidth={0.22}
-          style={{ filter: `drop-shadow(0 0 2.5px ${color})` }}
-          initial={{ pathLength: 0.14, pathSpacing: 1, pathOffset: 0 }}
+          strokeWidth={0.32}
+          style={{ filter: `drop-shadow(0 0 3px ${color})` }}
+          initial={{ pathLength: 0.08, pathSpacing: 1, pathOffset: 0 }}
           animate={{ pathOffset: [0, 1] }}
           transition={{
             pathOffset: {
