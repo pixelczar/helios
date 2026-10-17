@@ -10,7 +10,7 @@ const EASE = [0.25, 0.1, 0.25, 1] as const;
 // viewport. The core of the year's routes (robust percentile bounds) is
 // fitted and centered in this frame; one-off runs out of town spill past it
 // and fade into the falloff instead of shrinking the home streets.
-const FRAME = { cx: 0.5, cy: 0.59, w: 0.5, h: 0.36 };
+const FRAME = { cx: 0.5, cy: 0.56, w: 0.55, h: 0.42 };
 const LINE_ALPHA = 0.14;
 
 export interface HeatmapRoute {
