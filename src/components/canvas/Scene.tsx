@@ -32,6 +32,10 @@ export function Scene({ activityCount, isLoading = false }: SceneProps) {
       }}
       dpr={isMobile ? [1, 1.5] : [1, 2]}
       camera={{ position: [0, 0, 5], fov: 60, near: 0.1, far: 2000 }}
+      onCreated={({ gl }) => {
+        // Reading shader info logs forces a sync GPU round-trip per program
+        gl.debug.checkShaderErrors = process.env.NODE_ENV !== "production";
+      }}
       style={{
         position: "fixed",
         top: 0,
@@ -46,7 +50,7 @@ export function Scene({ activityCount, isLoading = false }: SceneProps) {
       <Suspense fallback={null}>
         <Background />
         {activityCount > 0 && (
-          <ScrollControls pages={pages} damping={0.25} distance={1}>
+          <ScrollControls pages={pages} damping={0.16} distance={1}>
             {/* No <Scroll> wrapper — we handle Z translation manually.
                 <Scroll> auto-translates children on Y axis which we don't want. */}
             <RunTimeline />

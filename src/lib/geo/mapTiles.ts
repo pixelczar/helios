@@ -13,9 +13,17 @@ const TILE_URL = "https://basemaps.cartocdn.com/dark_nolabels";
 const CARTO_API_KEY = process.env.NEXT_PUBLIC_CARTO_API_KEY ?? "";
 const KEY_PARAM = CARTO_API_KEY ? `?key=${CARTO_API_KEY}` : "";
 
+// CARTO's keyed dark style renders roads much brighter and bluer than the
+// old Dark Matter tiles — pull them back down when compositing.
+const TILE_FILTER = "brightness(0.5) saturate(0.35)";
+// Vignette radii as fractions of the half-width/height (inner = fully
+// visible, outer = fully faded at the edge midpoints)
+const VIGNETTE_INNER = 0.35;
+const VIGNETTE_OUTER = 0.98;
+
 // LRU cache — keyed by activityId
 const cache = new Map<number, { canvas: HTMLCanvasElement; coverage: TileCoverage }>();
-const CACHE_LIMIT = 200;
+const CACHE_LIMIT = 20; // composited maps can be ~25MB each — keep the window small
 
 function evictOldest() {
   if (cache.size >= CACHE_LIMIT) {
@@ -137,6 +145,7 @@ async function _fetchMapImageInner(
   ctx.roundRect(0, 0, w, h, cornerRadius);
   ctx.clip();
 
+  ctx.filter = TILE_FILTER;
   for (const result of results) {
     if (!result) continue;
     ctx.drawImage(
@@ -148,17 +157,22 @@ async function _fetchMapImageInner(
     );
   }
 
+  ctx.filter = "none";
+
   // Soft vignette — erase edges to transparent (avoids banding from
-  // darkening near-black tiles with multiply)
-  const edgeGrad = ctx.createRadialGradient(
-    w / 2, h / 2, Math.min(w, h) * 0.4,
-    w / 2, h / 2, Math.max(w, h) * 0.68
-  );
+  // darkening near-black tiles with multiply). Elliptical so it reaches
+  // every edge of non-square maps; a circle leaves hard seams on the long axis.
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(w / 2, h / 2);
+  const edgeGrad = ctx.createRadialGradient(0, 0, VIGNETTE_INNER, 0, 0, VIGNETTE_OUTER);
   edgeGrad.addColorStop(0, "rgba(0,0,0,0)");
-  edgeGrad.addColorStop(1, "rgba(0,0,0,0.92)");
+  edgeGrad.addColorStop(0.5, "rgba(0,0,0,0.55)");
+  edgeGrad.addColorStop(1, "rgba(0,0,0,1)");
   ctx.globalCompositeOperation = "destination-out";
   ctx.fillStyle = edgeGrad;
-  ctx.fillRect(0, 0, w, h);
+  ctx.fillRect(-1, -1, 2, 2);
+  ctx.restore();
   ctx.globalCompositeOperation = "source-over";
 
   const entry = { canvas, coverage };

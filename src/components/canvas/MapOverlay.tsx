@@ -7,9 +7,11 @@ import { fetchMapImage } from "@/lib/geo/mapTiles";
 
 const BASE_OPACITY = 0.95;
 const FADE_SPEED = 1.5; // per second — reaches full in ~430ms
+const TINT_AMOUNT = 0.4; // how far the streets lean toward the run's pace color
 
 interface MapOverlayProps {
   activityId: number;
+  tint: THREE.Color;
   rawPoints: [number, number][];
   normParams: {
     centerLat: number;
@@ -19,7 +21,7 @@ interface MapOverlayProps {
   };
 }
 
-export function MapOverlay({ activityId, rawPoints, normParams }: MapOverlayProps) {
+export function MapOverlay({ activityId, tint, rawPoints, normParams }: MapOverlayProps) {
   const [texture, setTexture] = useState<THREE.CanvasTexture | null>(null);
   const [planeBounds, setPlaneBounds] = useState<{
     width: number;
@@ -32,6 +34,9 @@ export function MapOverlay({ activityId, rawPoints, normParams }: MapOverlayProp
 
   useEffect(() => {
     let cancelled = false;
+    // Free the GPU copy when the card leaves the map window — the source
+    // canvas stays in mapTiles' cache, so coming back is a cheap re-upload
+    let created: THREE.CanvasTexture | null = null;
 
     fetchMapImage(activityId, rawPoints).then((result) => {
       if (cancelled || !result) return;
@@ -57,12 +62,14 @@ export function MapOverlay({ activityId, rawPoints, normParams }: MapOverlayProp
       tex.anisotropy = 4;
       tex.colorSpace = THREE.SRGBColorSpace;
 
+      created = tex;
       setTexture(tex);
       setPlaneBounds({ width, height, x, y });
     });
 
     return () => {
       cancelled = true;
+      created?.dispose();
     };
   }, [activityId, rawPoints, normParams]);
 
@@ -76,6 +83,13 @@ export function MapOverlay({ activityId, rawPoints, normParams }: MapOverlayProp
     }
     matRef.current.userData.baseOpacity = fadeProgress.current;
   });
+
+  // Material color multiplies the texture — a light wash of the pace color
+  // gives each run's streets its own mood without competing with the line
+  const tintColor = useMemo(
+    () => new THREE.Color(1, 1, 1).lerp(tint, TINT_AMOUNT),
+    [tint]
+  );
 
   const planeGeo = useMemo(() => {
     if (!planeBounds) return null;
@@ -93,6 +107,7 @@ export function MapOverlay({ activityId, rawPoints, normParams }: MapOverlayProp
       <meshBasicMaterial
         ref={matRef}
         map={texture}
+        color={tintColor}
         transparent
         opacity={0}
         depthWrite={false}

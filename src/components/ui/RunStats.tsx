@@ -1,6 +1,7 @@
 "use client";
 
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { useEffect, useRef } from "react";
+import { motion, AnimatePresence, useReducedMotion, animate } from "framer-motion";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
 import { PhotoStrip } from "./PhotoStrip";
 import {
@@ -34,7 +35,7 @@ function itemVariants(i: number, reducedMotion: boolean | null) {
       opacity: 0,
       y: -10,
       filter: "blur(4px)",
-      transition: { duration: 0.3, delay: i * 0.03, ease: EASE },
+      transition: { duration: 0.22, delay: i * 0.015, ease: EASE },
     },
   };
 }
@@ -45,8 +46,9 @@ export function RunStats() {
 
   if (!currentActivity) return null;
 
+  // No "wait" mode — outgoing stats fade while the next ones rise in
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence>
       <motion.div
         key={currentActivity.id}
         initial="initial"
@@ -83,9 +85,9 @@ export function RunStats() {
         {/* Distance — big, fat, italic */}
         <motion.p
           variants={itemVariants(2, reducedMotion)}
-          className="text-6xl md:text-9xl font-black italic text-foreground tracking-tighter"
+          className="text-6xl md:text-9xl font-black italic text-foreground tracking-tighter tabular-nums"
         >
-          {formatDistance(currentActivity.distance)}
+          <CountUp meters={currentActivity.distance} reducedMotion={reducedMotion} />
           <span className="text-base text-neutral-500 ml-2 font-normal tracking-normal italic">
             mi
           </span>
@@ -127,6 +129,35 @@ export function RunStats() {
       </motion.div>
     </AnimatePresence>
   );
+}
+
+// Distance rolls up from ~80% to its final value as it blurs in — a quick
+// settle, not a slot machine. Writes straight to the DOM to skip re-renders.
+function CountUp({
+  meters,
+  reducedMotion,
+}: {
+  meters: number;
+  reducedMotion: boolean | null;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const final = formatDistance(meters);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || reducedMotion) return;
+    const controls = animate(meters * 0.8, meters, {
+      duration: 0.7,
+      delay: 2 * STAGGER,
+      ease: [0.16, 1, 0.3, 1],
+      onUpdate: (v) => {
+        el.textContent = formatDistance(v);
+      },
+    });
+    return () => controls.stop();
+  }, [meters, reducedMotion]);
+
+  return <span ref={ref}>{final}</span>;
 }
 
 function Stat({

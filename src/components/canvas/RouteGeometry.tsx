@@ -1,15 +1,53 @@
 "use client";
 
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { decodePolyline } from "@/lib/geo/polyline";
 import { normalizeRoute } from "@/lib/geo/normalize";
 import { simplifyRoute } from "@/lib/geo/simplify";
+import { buildRouteTube } from "@/lib/geo/tube";
 import { useActivityStore } from "@/stores/activityStore";
 import { useRouteControls } from "./useRouteControls";
 
 const RADIAL_SEGMENTS = 6;
+const INDICES_PER_SEGMENT = RADIAL_SEGMENTS * 6;
+// Card visibility range over which the line draws on (start → fully drawn)
+const DRAW_START = 0.3;
+const DRAW_END = 0.95;
+
+// Dash alpha strip for the tracer — identical for every route, so it is
+// built once per dash ratio and shared (each route still gets its own
+// texture, since the tracer scrolls via texture.offset)
+const tracerCanvases = new Map<number, HTMLCanvasElement>();
+function getTracerCanvas(dashRatio: number): HTMLCanvasElement {
+  const cached = tracerCanvases.get(dashRatio);
+  if (cached) return cached;
+  const W = 2048;
+  const canvas = document.createElement("canvas");
+  canvas.width = W;
+  canvas.height = 1;
+  const ctx = canvas.getContext("2d")!;
+  // Gap region (alpha = 0)
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, W, 1);
+  // Soft dash with gaussian-like falloff for smooth motion
+  const dashLen = Math.max(4, Math.round(W * (1 - dashRatio)));
+  const imgData = ctx.getImageData(0, 0, W, 1);
+  const data = imgData.data;
+  const center = dashLen / 2;
+  const sigma = dashLen / 3; // falloff width — ~3σ covers the full dash
+  for (let x = 0; x < dashLen; x++) {
+    const dist = (x - center) / sigma;
+    const alpha = Math.exp(-0.5 * dist * dist);
+    const idx = x * 4;
+    data[idx] = data[idx + 1] = data[idx + 2] = Math.round(alpha * 255);
+    data[idx + 3] = 255;
+  }
+  ctx.putImageData(imgData, 0, 0);
+  tracerCanvases.set(dashRatio, canvas);
+  return canvas;
+}
 
 interface RouteGeometryProps {
   activityId: number;
@@ -17,6 +55,7 @@ interface RouteGeometryProps {
   color: THREE.Color;
   colorEnd?: THREE.Color;
   showTracer?: boolean;
+  visibilityRef?: RefObject<number>;
   averageSpeed?: number; // m/s
   maxSpeed?: number; // m/s
 }
@@ -27,6 +66,7 @@ export function RouteGeometry({
   color,
   colorEnd,
   showTracer = false,
+  visibilityRef,
   averageSpeed = 0,
   maxSpeed = 0,
 }: RouteGeometryProps) {
@@ -37,6 +77,7 @@ export function RouteGeometry({
   const glowMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const tracerMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const capGlowMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const endCapRef = useRef<THREE.Mesh>(null);
   const capPulse = useRef(0);       // current pulse intensity 0→1
   const loopPause = useRef(0);      // seconds remaining in pause between loops
   const tracerOffset = useRef(-1e-4);   // accumulated tracer scroll offset (seeded slightly negative to avoid false wrap on first frame)
@@ -77,35 +118,31 @@ export function RouteGeometry({
     return curve.getPoints(totalSegments);
   }, [rawPoints, controls.smoothEnabled, controls.smoothTension, controls.smoothSubdivisions]);
 
-  // Piecewise-linear curve through the smoothed points
-  const curve = useMemo(() => {
-    if (!routeVectors || routeVectors.length < 2) return null;
-    const path = new THREE.CurvePath<THREE.Vector3>();
-    for (let i = 0; i < routeVectors.length - 1; i++) {
-      path.add(new THREE.LineCurve3(routeVectors[i], routeVectors[i + 1]));
-    }
-    return path;
-  }, [routeVectors]);
-
-  // Tube geometries — circular cross-section, no viewport dependency
-  const segmentCount = routeVectors ? routeVectors.length : 0;
-
-  // Helper: stamp per-vertex RGBA gradient onto a TubeGeometry.
+  // Per-vertex RGBA gradient for the tubes.
   // RGB = pace color gradient, A = opacity fade along the tube.
   // Using 4-component vertex colors triggers USE_COLOR_ALPHA in three.js
   // which multiplies diffuseColor by vColor (including alpha), avoiding
-  // alphaMap texture issues with TubeGeometry's circumferential UV wrap.
+  // alphaMap texture issues with the tube's circumferential UV wrap.
+  // Every vertex in a ring shares the same u, and all three tubes share the
+  // same rings — so the gradient is computed once per ring and reused.
   const endCol = colorEnd ?? color;
-  const alphaStops: [number, number][] = [
-    [0, 0],
-    [controls.gradPeakPoint, 1],
-    [1, controls.gradEndAlpha],
-  ];
-  const applyVertexGradient = (geo: THREE.TubeGeometry) => {
-    const uvs = geo.attributes.uv;
-    const rgba = new Float32Array(uvs.count * 4);
-    for (let i = 0; i < uvs.count; i++) {
-      const u = uvs.getX(i);
+  const ringColors = useMemo(() => {
+    if (!routeVectors || routeVectors.length < 2) return null;
+    const alphaStops: [number, number][] = [
+      [0, 0],
+      [controls.gradPeakPoint, 1],
+      [1, controls.gradEndAlpha],
+    ];
+    // Same arc-length parameterization buildRouteTube uses for uv.x
+    const n = routeVectors.length;
+    const lengths = new Float32Array(n);
+    for (let i = 1; i < n; i++) {
+      lengths[i] = lengths[i - 1] + routeVectors[i].distanceTo(routeVectors[i - 1]);
+    }
+    const total = lengths[n - 1] || 1;
+    const rgba = new Float32Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      const u = lengths[i] / total;
       // Color gradient
       rgba[i * 4 + 0] = color.r + (endCol.r - color.r) * u;
       rgba[i * 4 + 1] = color.g + (endCol.g - color.g) * u;
@@ -122,32 +159,34 @@ export function RouteGeometry({
       }
       rgba[i * 4 + 3] = alpha;
     }
+    return rgba;
+  }, [routeVectors, color, endCol, controls.gradPeakPoint, controls.gradEndAlpha]);
+
+  const buildTube = (radius: number) => {
+    if (!routeVectors || !ringColors) return null;
+    const geo = buildRouteTube(routeVectors, radius, RADIAL_SEGMENTS);
+    const ringSize = RADIAL_SEGMENTS + 1;
+    const rgba = new Float32Array(routeVectors.length * ringSize * 4);
+    for (let i = 0; i < routeVectors.length; i++) {
+      for (let j = 0; j < ringSize; j++) {
+        rgba.set(ringColors.subarray(i * 4, i * 4 + 4), (i * ringSize + j) * 4);
+      }
+    }
     geo.setAttribute("color", new THREE.Float32BufferAttribute(rgba, 4));
+    return geo;
   };
 
-  const glowGeo = useMemo(() => {
-    if (!curve || !segmentCount) return null;
-    const geo = new THREE.TubeGeometry(curve, segmentCount, controls.glowWidth / 2, RADIAL_SEGMENTS, false);
-    applyVertexGradient(geo);
-    return geo;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curve, segmentCount, controls.glowWidth, color, colorEnd, controls.gradPeakPoint, controls.gradEndAlpha]);
+  const glowGeo = useMemo(() => buildTube(controls.glowWidth / 2), [ringColors, controls.glowWidth]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const coreGeo = useMemo(() => buildTube(controls.coreWidth / 2), [ringColors, controls.coreWidth]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tracerGeo = useMemo(() => buildTube(controls.tracerWidth / 2), [ringColors, controls.tracerWidth]);
 
-  const coreGeo = useMemo(() => {
-    if (!curve || !segmentCount) return null;
-    const geo = new THREE.TubeGeometry(curve, segmentCount, controls.coreWidth / 2, RADIAL_SEGMENTS, false);
-    applyVertexGradient(geo);
-    return geo;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curve, segmentCount, controls.coreWidth, color, colorEnd, controls.gradPeakPoint, controls.gradEndAlpha]);
-
-  const tracerGeo = useMemo(() => {
-    if (!curve || !segmentCount) return null;
-    const geo = new THREE.TubeGeometry(curve, segmentCount, controls.tracerWidth / 2, RADIAL_SEGMENTS, false);
-    applyVertexGradient(geo);
-    return geo;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [curve, segmentCount, controls.tracerWidth, color, colorEnd, controls.gradPeakPoint, controls.gradEndAlpha]);
+  // Release GPU buffers when a route leaves the build window or is rebuilt
+  useEffect(() => () => glowGeo?.dispose(), [glowGeo]);
+  useEffect(() => () => coreGeo?.dispose(), [coreGeo]);
+  useEffect(() => () => tracerGeo?.dispose(), [tracerGeo]);
 
   // Single-color derivatives — used for start/end caps
   const coreColor = useMemo(
@@ -180,28 +219,7 @@ export function RouteGeometry({
   // Dash alpha texture for tracer — scrolled via offset.x each frame
   // Uses a high-res texture with smooth gaussian falloff to avoid aliasing
   const tracerAlphaMap = useMemo(() => {
-    const W = 2048;
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = 1;
-    const ctx = canvas.getContext("2d")!;
-    // Gap region (alpha = 0)
-    ctx.fillStyle = "black";
-    ctx.fillRect(0, 0, W, 1);
-    // Soft dash with gaussian-like falloff for smooth motion
-    const dashLen = Math.max(4, Math.round(W * (1 - controls.tracerDashRatio)));
-    const imgData = ctx.getImageData(0, 0, W, 1);
-    const data = imgData.data;
-    const center = dashLen / 2;
-    const sigma = dashLen / 3; // falloff width — ~3σ covers the full dash
-    for (let x = 0; x < dashLen; x++) {
-      const dist = (x - center) / sigma;
-      const alpha = Math.exp(-0.5 * dist * dist);
-      const idx = x * 4;
-      data[idx] = data[idx + 1] = data[idx + 2] = Math.round(alpha * 255);
-      data[idx + 3] = 255;
-    }
-    ctx.putImageData(imgData, 0, 0);
+    const canvas = getTracerCanvas(controls.tracerDashRatio);
     const tex = new THREE.CanvasTexture(canvas);
     tex.wrapS = THREE.RepeatWrapping;
     tex.minFilter = THREE.LinearFilter;
@@ -254,6 +272,21 @@ export function RouteGeometry({
 
   // Priority -1 so base opacities are set BEFORE RunCard's visibility traverse (priority 0)
   useFrame(({ clock }, delta) => {
+    // Draw-on: reveal the tube from the start point as the card nears focus
+    const vis = visibilityRef?.current ?? 1;
+    const draw = prefersReducedMotion
+      ? 1
+      : THREE.MathUtils.smoothstep(vis, DRAW_START, DRAW_END);
+    for (const geo of [glowGeo, coreGeo, tracerGeo]) {
+      if (!geo?.index) continue;
+      const total = geo.index.count;
+      const count = draw >= 1
+        ? total
+        : Math.floor((draw * total) / INDICES_PER_SEGMENT) * INDICES_PER_SEGMENT;
+      geo.setDrawRange(0, count);
+    }
+    if (endCapRef.current) endCapRef.current.visible = draw >= 1;
+
     // Set userData.baseOpacity so RunCard's traverse computes: opacity = base * visibility
     if (coreMatRef.current) {
       coreMatRef.current.userData.baseOpacity = controls.coreOpacity;
@@ -398,7 +431,7 @@ export function RouteGeometry({
 
       {/* End cap — subtle, no glow */}
       {controls.capEnabled && lastPoint && (
-        <mesh position={lastPoint} renderOrder={1} geometry={coreCapGeo}>
+        <mesh ref={endCapRef} position={lastPoint} renderOrder={1} geometry={coreCapGeo}>
           <meshBasicMaterial
             transparent
             color={coreColorEnd}

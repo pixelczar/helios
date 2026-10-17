@@ -37,12 +37,13 @@ export default function AppPage() {
   // When the first activities arrive, kick off a warmup window:
   // the 3D scene renders behind the loading screen for 400ms so shaders
   // compile and geometries upload before the loading screen exits.
-  // Also prefetch map tiles for the first visible cards.
+  // Also prefetch map tiles for the newest runs — the app opens on Today,
+  // so those are the first cards anyone steps into.
   useEffect(() => {
     if (activities.length > 0 && !warmupStarted.current) {
       warmupStarted.current = true;
       const { decodedRoutes } = useActivityStore.getState();
-      activities.slice(0, 10).forEach((activity) => {
+      activities.slice(-10).reverse().forEach((activity) => {
         const decoded = decodedRoutes.get(activity.id);
         if (decoded?.points?.length) {
           fetchMapImage(activity.id, decoded.points);
@@ -119,6 +120,8 @@ export default function AppPage() {
                     }}
                     transition={{ duration: 0.4, ease: EASE }}
                   >
+                    {/* Soft scrim so the route never fights the stats for contrast */}
+                    <div className="hidden md:block absolute inset-y-0 left-0 w-[42vw] bg-gradient-to-r from-black/70 via-black/35 to-transparent pointer-events-none" />
                     <RunStats />
                   </motion.div>
                 )}

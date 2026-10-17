@@ -48,4 +48,5 @@ export const POST_DEFAULTS = {
   smoothing: 0.16,
   vignetteOffset: 0.0,
   vignetteDarkness: 1.0,
+  grainOpacity: 0.08,
 };

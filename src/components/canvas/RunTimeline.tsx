@@ -8,8 +8,15 @@ import { RunCard } from "./RunCard";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 import { isSnapLocked } from "@/lib/scrollLock";
+import { INTRO_RUNS } from "@/lib/timeline";
 
 const RUN_SPACING = 20;
+// Only runs this close to the focused one keep a basemap mounted — each map
+// is a multi-megapixel texture, and every other run is invisible anyway
+const MAP_WINDOW = 2;
+// Route geometry is built only near focus too — a card fades to zero one
+// step away, so building all ~90 routes up front just stalled the load
+const ROUTE_WINDOW = 3;
 
 export function RunTimeline() {
   const scroll = useScroll();
@@ -195,14 +202,33 @@ export function RunTimeline() {
     const targetZ = scroll.offset * totalDepth;
     const sp = zSpring.current;
 
+    // Feed drei's damping target (scroll.scroll) from the real scroll position
+    // every frame. drei derives it from a scroll range it measures once at
+    // connect time, so after a resize it drifts and the focused run settles
+    // off its slot (too close to the camera). Until the initial jump to Today
+    // lands, pin it to Today so the intro never drifts toward the oldest run.
+    const scrollTarget = (scroll as typeof scroll & { scroll: { current: number } }).scroll;
+    const el = scroll.el;
+    const scrollable = el.scrollHeight - el.clientHeight;
+    // drei's scroll state is mutable by design (it's read/written per frame)
+    // eslint-disable-next-line react-hooks/immutability
+    scrollTarget.current = !initializedScroll.current
+      ? 1
+      : scrollable > 0 ? el.scrollTop / scrollable : 0;
+
     if (!sp.initialized) {
-      sp.value = targetZ;
+      // Intro: start a few runs short of Today and let drei's damping glide
+      // the rest of the way
+      const startOffset = Math.max(0, totalSlots - INTRO_RUNS) / Math.max(totalSlots, 1);
+      // eslint-disable-next-line react-hooks/immutability
+      scroll.offset = startOffset;
+      sp.value = startOffset * totalDepth;
       sp.initialized = true;
     }
 
     const dt = Math.min(delta, 0.04);
-    const stiffness = 120;
-    const damping = 20;
+    const stiffness = 180;
+    const damping = 26; // ~critically damped — quicker settle, no overshoot
     const force = stiffness * (targetZ - sp.value) - damping * sp.velocity;
     sp.velocity += force * dt;
     sp.value += sp.velocity * dt;
@@ -229,6 +255,8 @@ export function RunTimeline() {
           paceRatio={paceRatios[index]}
           prevPaceRatio={index > 0 ? paceRatios[index - 1] : paceRatios[index]}
           isFocused={index === currentIndex}
+          showMap={Math.abs(index - currentIndex) <= MAP_WINDOW}
+          showRoute={Math.abs(index - currentIndex) <= ROUTE_WINDOW}
           onSelect={() => scrollToIndex(index)}
         />
       ))}

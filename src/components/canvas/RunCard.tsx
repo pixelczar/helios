@@ -13,6 +13,9 @@ import { getRouteColor } from "@/lib/colors";
 import { useActivityStore } from "@/stores/activityStore";
 import { wasPanDrag } from "./CameraPan";
 
+// Lower = neighbors linger longer while crossing (was 1.2: fully hand-off)
+const VISIBILITY_FALLOFF = 0.8;
+
 interface RunCardProps {
   activity: StravaActivity;
   index: number;
@@ -22,6 +25,8 @@ interface RunCardProps {
   paceRatio: number;
   prevPaceRatio: number;
   isFocused: boolean;
+  showMap: boolean;
+  showRoute: boolean;
   onSelect: () => void;
 }
 
@@ -34,11 +39,15 @@ export function RunCard({
   paceRatio,
   prevPaceRatio,
   isFocused,
+  showMap,
+  showRoute,
   onSelect,
 }: RunCardProps) {
   const scroll = useScroll();
   const groupRef = useRef<THREE.Group>(null!);
   const [hovered, setHovered] = useState(false);
+  // Shared with RouteGeometry so the line draws on as the card comes into focus
+  const visibilityRef = useRef(0);
   const decodedRoute = useActivityStore((s) => s.decodedRoutes.get(activity.id));
 
   // totalSlots = N (N activities, Today sits at offset 1 after all of them)
@@ -71,19 +80,21 @@ export function RunCard({
     // How far this run is from the current scroll center (0 = centered, 1 = far)
     const distFromCenter = Math.abs(scroll.offset - scrollCenter) / scrollSegment;
 
-    // Visibility: sharp falloff so only the focused run is prominent
+    // Visibility: falloff wide enough that neighbors overlap mid-transition
+    // (both ~35% at the halfway point) for a crossfade, not a hand-off
     const visibility = THREE.MathUtils.clamp(
-      1 - distFromCenter * 1.2,
+      1 - distFromCenter * VISIBILITY_FALLOFF,
       0,
       1
     );
+    visibilityRef.current = visibility;
 
     // Scale: runs grow as they approach center
     const scale = THREE.MathUtils.lerp(0.3, 1.0, visibility);
     groupRef.current.scale.setScalar(scale);
 
-    // Opacity — cubic curve for aggressive fade on neighbors
-    const vis = Math.pow(visibility, 3.0);
+    // Opacity — squared curve keeps the focused run dominant
+    const vis = Math.pow(visibility, 2.0);
     groupRef.current.traverse((child) => {
       if ((child as THREE.Mesh).material) {
         const mat = (child as THREE.Mesh).material as THREE.Material & {
@@ -152,22 +163,24 @@ export function RunCard({
         document.body.style.cursor = "default";
       }}
     >
-      {activity.map.summary_polyline ? (
+      {!showRoute ? null : activity.map.summary_polyline ? (
         <RouteGeometry
           activityId={activity.id}
           polyline={activity.map.summary_polyline}
           color={color}
           colorEnd={colorEnd}
           showTracer={isFocused}
+          visibilityRef={visibilityRef}
           averageSpeed={activity.average_speed}
           maxSpeed={activity.max_speed}
         />
       ) : (
         <PlaceholderGeometry color={color} colorEnd={colorEnd} showTracer={isFocused} />
       )}
-      {decodedRoute?.normParams && decodedRoute.points.length > 0 && (
+      {showMap && decodedRoute?.normParams && decodedRoute.points.length > 0 && (
         <MapOverlay
           activityId={activity.id}
+          tint={color}
           rawPoints={decodedRoute.points}
           normParams={decodedRoute.normParams}
         />
