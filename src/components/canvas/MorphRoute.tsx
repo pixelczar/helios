@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
-import { useScroll } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import type { StravaActivity } from "@/lib/strava/types";
@@ -18,6 +17,10 @@ const RADIAL_SEGMENTS = 6;
 // Morph line fades in over the first/last 4% of a step (as a fraction of
 // the half-step), so it hands off to the real route right before settling
 const HANDOFF = 0.08;
+// Over the last ~15% of a step the line eases onto the arriving card's exact
+// depth and scale, so the hand-off lines up instead of showing the card
+// still flying in behind it
+const FOLLOW = 0.3;
 
 interface MorphRouteProps {
   activities: StravaActivity[];
@@ -33,7 +36,6 @@ interface MorphRouteProps {
  * depth — so the swap is invisible.
  */
 export function MorphRoute({ activities, paceRatios, totalSlots }: MorphRouteProps) {
-  const scroll = useScroll();
   const decodedRoutes = useActivityStore((s) => s.decodedRoutes);
   const controls = useRouteControls();
   const groupRef = useRef<THREE.Group>(null);
@@ -105,7 +107,9 @@ export function MorphRoute({ activities, paceRatios, totalSlots }: MorphRoutePro
     const group = groupRef.current;
     if (!group) return;
 
-    const raw = THREE.MathUtils.clamp(scroll.offset * totalSlots, 0, totalSlots);
+    // Track where the cards actually are (the timeline spring), not the raw
+    // scroll offset — otherwise the morph finishes before the card lands
+    const raw = THREE.MathUtils.clamp(morphState.timelineIndex, 0, totalSlots);
     const lo = Math.min(Math.floor(raw), totalSlots);
     const hi = Math.min(lo + 1, totalSlots);
     const frac = raw - lo;
@@ -147,7 +151,12 @@ export function MorphRoute({ activities, paceRatios, totalSlots }: MorphRoutePro
         pa.ry + (pb.ry - pa.ry) * t,
         pa.rz + (pb.rz - pa.rz) * t
       );
-      group.position.z = pa.kz + (pb.kz - pa.kz) * t;
+      // Mid-step the line holds center stage; near either end it locks onto
+      // the nearest card's real depth and scale
+      const near = frac < 0.5 ? pa : pb;
+      const follow = 1 - THREE.MathUtils.smoothstep(halfStep, 0, FOLLOW);
+      group.position.z = near.z * follow;
+      group.scale.setScalar(1 + (near.scale - 1) * follow);
     }
 
     if (coreMatRef.current) coreMatRef.current.opacity = controls.coreOpacity * vis;

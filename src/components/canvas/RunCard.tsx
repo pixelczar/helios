@@ -16,9 +16,6 @@ import { cardPoses, parallax } from "./motionState";
 
 // Lower = neighbors linger longer while crossing (was 1.2: fully hand-off)
 const VISIBILITY_FALLOFF = 0.8;
-// The map trails the route against the pointer tilt (world units per unit
-// of tilt) — two depths moving at different rates read as real depth
-const MAP_PARALLAX = 2.2;
 
 interface RunCardProps {
   activity: StravaActivity;
@@ -52,7 +49,6 @@ export function RunCard({
   const [hovered, setHovered] = useState(false);
   // Shared with RouteGeometry so the line draws on as the card comes into focus
   const visibilityRef = useRef(0);
-  const mapGroupRef = useRef<THREE.Group>(null);
   const decodedRoute = useActivityStore((s) => s.decodedRoutes.get(activity.id));
 
   // totalSlots = N (N activities, Today sits at offset 1 after all of them)
@@ -142,27 +138,27 @@ export function RunCard({
     }
 
     // Subtle rotation when off-center + kick
-    // Pointer tilt — weighted by visibility so only the run in front leans
+    // Pointer tilt — the whole run (route + map together, so the line stays
+    // registered to its streets) leans toward the cursor; weighted by
+    // visibility so only the run in front moves
     const tiltX = parallax.x * visibility;
     const tiltY = parallax.y * visibility;
     groupRef.current.rotation.y = (1 - visibility) * 0.15 + k.ry + tiltY;
     groupRef.current.rotation.x = (1 - visibility) * -0.05 + tiltX;
     groupRef.current.rotation.z = k.rz;
     groupRef.current.position.z = zPosition + k.z;
-    if (mapGroupRef.current) {
-      mapGroupRef.current.position.x = -tiltY * MAP_PARALLAX;
-      mapGroupRef.current.position.y = tiltX * MAP_PARALLAX;
-    }
 
     // Publish the pose so the morph line can match this card exactly
+    const worldZ = (groupRef.current.parent?.position.z ?? 0) + groupRef.current.position.z;
     const pose = cardPoses.get(index);
     if (pose) {
       pose.rx = groupRef.current.rotation.x;
       pose.ry = groupRef.current.rotation.y;
       pose.rz = k.rz;
-      pose.kz = k.z;
+      pose.z = worldZ;
+      pose.scale = scale;
     } else {
-      cardPoses.set(index, { rx: groupRef.current.rotation.x, ry: groupRef.current.rotation.y, rz: k.rz, kz: k.z });
+      cardPoses.set(index, { rx: groupRef.current.rotation.x, ry: groupRef.current.rotation.y, rz: k.rz, z: worldZ, scale });
     }
   });
 
@@ -200,16 +196,14 @@ export function RunCard({
       ) : (
         <PlaceholderGeometry color={color} colorEnd={colorEnd} showTracer={isFocused} />
       )}
-      <group ref={mapGroupRef}>
-        {showMap && decodedRoute?.normParams && decodedRoute.points.length > 0 && (
-          <MapOverlay
-            activityId={activity.id}
-            tint={color}
-            rawPoints={decodedRoute.points}
-            normParams={decodedRoute.normParams}
-          />
-        )}
-      </group>
+      {showMap && decodedRoute?.normParams && decodedRoute.points.length > 0 && (
+        <MapOverlay
+          activityId={activity.id}
+          tint={color}
+          rawPoints={decodedRoute.points}
+          normParams={decodedRoute.normParams}
+        />
+      )}
       {isFocused && decodedRoute?.normParams && activity.total_photo_count > 0 && (
         <PhotoPins
           activityId={activity.id}

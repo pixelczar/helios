@@ -6,7 +6,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { RunCard } from "./RunCard";
 import { MorphRoute } from "./MorphRoute";
-import { parallax } from "./motionState";
+import { morphState, parallax } from "./motionState";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 import { isSnapLocked } from "@/lib/scrollLock";
@@ -256,6 +256,7 @@ export function RunTimeline() {
     sp.value += sp.velocity * dt;
 
     groupRef.current.position.z = sp.value;
+    morphState.timelineIndex = sp.value / RUN_SPACING;
 
     // rawIndex: 0 = oldest, N-1 = newest, N = Today
     const rawIndex = scroll.offset * totalSlots;
