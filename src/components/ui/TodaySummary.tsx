@@ -194,7 +194,7 @@ export function TodaySummary() {
         >
           {/* Day of year column */}
           <div className="flex flex-col items-end gap-2">
-            <span className="text-6xl md:text-8xl font-black tracking-tighter text-neutral-400 leading-none">
+            <span className="text-5xl font-black tracking-tighter text-neutral-400 leading-none">
               <RollingNumber value={String(todayData.dayOfYear)} delay={STAGGER} reducedMotion={reducedMotion} />
             </span>
             <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1 not-italic">
@@ -203,14 +203,14 @@ export function TodaySummary() {
           </div>
 
           {/* Separator */}
-          <span className="text-3xl md:text-4xl font-light text-neutral-700 mb-12">
+          <span className="text-2xl font-light text-neutral-700 mb-9">
             /
           </span>
 
           {/* Total miles column */}
           <div className="flex flex-col items-end gap-2">
             <span
-              className="text-6xl md:text-8xl font-black tracking-tighter leading-none"
+              className="text-5xl font-black tracking-tighter leading-none"
               style={{
                 color: deltaColor,
                 textShadow: `0 0 40px ${deltaColor}20`,
