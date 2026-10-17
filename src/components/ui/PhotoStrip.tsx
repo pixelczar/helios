@@ -162,7 +162,7 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
 
   return (
     <>
-      <div className="flex gap-1.5 mt-6">
+      <div className="flex gap-1.5 mt-9">
         {isLoading && thumbnails.length === 0
           ? Array.from({ length: Math.min(photoCount, 4) }).map((_, i) => (
               <div
