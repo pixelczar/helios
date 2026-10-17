@@ -21,6 +21,13 @@ function hexToRgb(hex: string): string {
   const n = parseInt(hex.slice(1), 16);
   return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
 }
+// The on-pace band is a dim neutral — right for the graph and resting ticks,
+// too quiet for the focused run. Focus elements (label, dot, active tick)
+// lift it to near-white; ahead/behind keep their colors.
+function focusColor(bandColor: string): string {
+  return bandColor === "#555555" ? "#f2f2f2" : bandColor;
+}
+
 const AHEAD_RGB = hexToRgb(AHEAD_COLOR);
 const BEHIND_RGB = hexToRgb(BEHIND_COLOR);
 
@@ -405,9 +412,9 @@ export function ScrollIndicator() {
             // Ticks are run markers — the pace graph carries the color now, so
             // they stay neutral and brighten near the dot/cursor. The current
             // run keeps its pace color to tie the tick to the dot.
-            const lineW = isCurrent ? 2 : 1 + hoverProximity * 1;
+            const lineW = isCurrent ? 2.5 : 1 + hoverProximity * 1;
             const color = isCurrent && ratios[i] !== undefined
-              ? getPaceBandColor(ratios[i])
+              ? focusColor(getPaceBandColor(ratios[i]))
               : `rgba(255, 255, 255, ${0.22 + effectiveProximity * 0.5})`;
 
             ctx.beginPath();
@@ -558,7 +565,7 @@ export function ScrollIndicator() {
   if (totalRuns === 0) return null;
 
   const currentColor = paceData[currentIndex]
-    ? getPaceBandColor(paceData[currentIndex].ratio)
+    ? focusColor(getPaceBandColor(paceData[currentIndex].ratio))
     : BEHIND_COLOR;
 
   return (
@@ -659,7 +666,7 @@ export function ScrollIndicator() {
               <motion.span
                 variants={{
                   initial: { opacity: 0, y: 6, filter: "blur(3px)" },
-                  animate: { opacity: 0.85, y: 0, filter: "blur(0px)", transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
+                  animate: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
                   exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } },
                 }}
                 className="text-base font-medium tabular-nums tracking-wide"
@@ -673,7 +680,7 @@ export function ScrollIndicator() {
               <motion.span
                 variants={{
                   initial: { opacity: 0, y: 6, filter: "blur(3px)" },
-                  animate: { opacity: 0.3, y: 0, filter: "blur(0px)", transition: { duration: 0.3, delay: 0.025, ease: [0.25, 0.1, 0.25, 1] } },
+                  animate: { opacity: 0.5, y: 0, filter: "blur(0px)", transition: { duration: 0.3, delay: 0.025, ease: [0.25, 0.1, 0.25, 1] } },
                   exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } },
                 }}
                 className="text-sm font-light"
