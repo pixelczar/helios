@@ -26,7 +26,9 @@ export function readDemoCache(): StravaActivity[] {
 
 /**
  * Reads cached photo arrays for a given activity, returning [] if not found.
- * Falls back to bundled seed photos when the runtime cache doesn't exist (e.g. on Vercel).
+ * Checks the runtime cache first, then falls back to the bundled seed photos
+ * per activity — so a partial runtime cache (e.g. only recent runs) never
+ * hides photos the seed has, and Vercel (no runtime cache) still has them.
  */
 export function readDemoPhotosCache(activityId: number): ActivityPhoto[] {
   try {
@@ -34,7 +36,7 @@ export function readDemoPhotosCache(activityId: number): ActivityPhoto[] {
       const map: Record<string, ActivityPhoto[]> = JSON.parse(
         fs.readFileSync(PHOTOS_CACHE_PATH, "utf8")
       );
-      return map[activityId] ?? [];
+      if (map[activityId]?.length) return map[activityId];
     }
   } catch {
     // fall through to bundled fallback
