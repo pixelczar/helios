@@ -33,16 +33,21 @@ export default function AppPage() {
   const warmupStarted = useRef(false);
   const doneWithNoData = !isLoading && activities.length === 0 && warmupDone;
   const isAtToday = currentIndex >= activities.length;
+  // The intro glides through the last few runs into Today — keep their stats
+  // hidden on the way so first load lands cleanly on the dashboard
+  const [introDone, setIntroDone] = useState(false);
+  if (!introDone && isAtToday && activities.length > 0) setIntroDone(true);
 
   // When the first activities arrive, kick off a warmup window:
   // the 3D scene renders behind the loading screen for 400ms so shaders
   // compile and geometries upload before the loading screen exits.
-  // Also prefetch map tiles for the first visible cards.
+  // Also prefetch map tiles for the newest runs — the app opens on Today,
+  // so those are the first cards anyone steps into.
   useEffect(() => {
     if (activities.length > 0 && !warmupStarted.current) {
       warmupStarted.current = true;
       const { decodedRoutes } = useActivityStore.getState();
-      activities.slice(0, 10).forEach((activity) => {
+      activities.slice(-10).reverse().forEach((activity) => {
         const decoded = decodedRoutes.get(activity.id);
         if (decoded?.points?.length) {
           fetchMapImage(activity.id, decoded.points);
@@ -76,7 +81,11 @@ export default function AppPage() {
 
       {doneWithNoData && <EmptyState error={error} />}
 
-      <Scene activityCount={activities.length} isLoading={activities.length === 0} />
+      <Scene
+        activityCount={activities.length}
+        isLoading={activities.length === 0}
+        paused={isAtToday && introDone}
+      />
 
       {/* Today summary — driven by scroll position */}
       <AnimatePresence>
@@ -106,7 +115,7 @@ export default function AppPage() {
             <HUD>
               {/* RunStats — hidden when at Today (currentActivity will be null) */}
               <AnimatePresence>
-                {!isAtToday && (
+                {!isAtToday && introDone && (
                   <motion.div
                     key="run-stats"
                     className="absolute inset-0"
@@ -119,6 +128,8 @@ export default function AppPage() {
                     }}
                     transition={{ duration: 0.4, ease: EASE }}
                   >
+                    {/* Soft scrim so the route never fights the stats for contrast */}
+                    <div className="hidden md:block absolute inset-y-0 left-0 w-[42vw] bg-gradient-to-r from-black/70 via-black/35 to-transparent pointer-events-none" />
                     <RunStats />
                   </motion.div>
                 )}

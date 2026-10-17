@@ -6,10 +6,30 @@ import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 import { getPaceBandColor } from "@/lib/colors";
 import { lockSnap } from "@/lib/scrollLock";
+import { INTRO_RUNS } from "@/lib/timeline";
+import { dailyPaceDeviation } from "@/lib/pace";
 
 const AHEAD_COLOR = "#00ffcc";
 const BEHIND_COLOR = "#ff8844";
-const NEUTRAL_COLOR = "#555555";
+
+// Pace graph — horizontal reach of the deviation curve from the baseline
+// (the on-pace line), in CSS px. Ahead grows left toward the content,
+// behind grows right toward the screen edge.
+const GRAPH_HALF_WIDTH = 22;
+
+function hexToRgb(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`;
+}
+// The on-pace band is a dim neutral — right for the graph and resting ticks,
+// too quiet for the focused run. Focus elements (label, dot, active tick)
+// lift it to near-white; ahead/behind keep their colors.
+function focusColor(bandColor: string): string {
+  return bandColor === "#555555" ? "#f2f2f2" : bandColor;
+}
+
+const AHEAD_RGB = hexToRgb(AHEAD_COLOR);
+const BEHIND_RGB = hexToRgb(BEHIND_COLOR);
 
 // Sharp falloff for the tick growth — a convex (quartic) curve so only the
 // ticks right at the active dot / cursor grow large, dropping off fast as
@@ -19,18 +39,67 @@ function sharpFalloff(x: number): number {
   return v * v * v * v;
 }
 
-function buildMask(progress: number, t: number): string {
-  const p = progress * 100;
-  const spread = 30 + t * 110;
-  const edge = 0.05 + t * 0.65;
-  return `linear-gradient(to bottom,rgba(255,255,255,${edge}) 0%,rgba(255,255,255,${edge}) ${Math.max(0, p - spread)}%,rgba(255,255,255,1) ${Math.max(0, p - 5)}%,rgba(255,255,255,1) ${Math.min(100, p + 5)}%,rgba(255,255,255,${edge}) ${Math.min(100, p + spread)}%,rgba(255,255,255,${edge}) 100%)`;
-}
-
 // The dot/label/ghost span the full height of the track — clamped only to
 // the valid 0-1 range, never inset from the ends. (An earlier inset here
 // was making the active dot top out around the middle 93% of the track.)
 function clampEdge(p: number): number {
   return Math.min(1, Math.max(0, p));
+}
+
+// Renders the static pace graph (fills + curve, no focus falloff) into an
+// offscreen canvas at the sidebar's buffer resolution
+function renderGraph(
+  dev: Float32Array,
+  maxAbs: number,
+  cssW: number,
+  cssH: number,
+  dpr: number
+): HTMLCanvasElement {
+  const off = document.createElement("canvas");
+  off.width = Math.round(cssW * dpr);
+  off.height = Math.round(cssH * dpr);
+  const ctx = off.getContext("2d")!;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const h = cssH;
+  const cx = cssW / 2;
+  const days = dev.length - 1;
+  const xOf = (v: number) => cx - (v / maxAbs) * GRAPH_HALF_WIDTH;
+
+  const curve = new Path2D();
+  const area = new Path2D();
+  area.moveTo(cx, 0);
+  for (let d = 0; d <= days; d++) {
+    const x = xOf(dev[d]);
+    const y = (d / days) * h;
+    if (d === 0) curve.moveTo(x, y);
+    else curve.lineTo(x, y);
+    area.lineTo(x, y);
+  }
+  area.lineTo(cx, h);
+  area.closePath();
+
+  const sides: [number, number, string][] = [
+    [0, cx, AHEAD_RGB], // ahead — left of the baseline
+    [cx, cssW - cx, BEHIND_RGB], // behind — right of it
+  ];
+  for (const [clipX, clipW, rgb] of sides) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(clipX, 0, clipW, h);
+    ctx.clip();
+    const edgeX = clipX === 0 ? cx - GRAPH_HALF_WIDTH : cx + GRAPH_HALF_WIDTH;
+    const fill = ctx.createLinearGradient(cx, 0, edgeX, 0);
+    fill.addColorStop(0, `rgba(${rgb}, 0.02)`);
+    fill.addColorStop(1, `rgba(${rgb}, 0.45)`);
+    ctx.fillStyle = fill;
+    ctx.fill(area);
+    ctx.strokeStyle = `rgb(${rgb})`;
+    ctx.lineWidth = 1.25;
+    ctx.lineJoin = "round";
+    ctx.stroke(curve);
+    ctx.restore();
+  }
+  return off;
 }
 
 // Velocity-aware spring — overshoots then settles
@@ -50,7 +119,6 @@ export function ScrollIndicator() {
   const yearlyTarget = useGoalStore((s) => s.yearlyTarget);
   const reducedMotion = useReducedMotion();
   const trackRef = useRef<HTMLDivElement>(null);
-  const paceTrackRef = useRef<HTMLDivElement>(null);
   const glowRef = useRef<HTMLDivElement>(null);
   const dotRef = useRef<HTMLDivElement>(null);
   const dotCoreRef = useRef<HTMLDivElement>(null);
@@ -74,6 +142,9 @@ export function ScrollIndicator() {
   // Ghost trail — even more delayed
   const ghostProgress = useRef(0);
   const ghostVelocity = useRef(0);
+  // Seed the dot a few runs short of Today on first data (matching the 3D
+  // intro) instead of springing up from Jan 1 across the whole track
+  const dotSeeded = useRef(false);
 
   // Trail history for fading wake
   const trailHistory = useRef<{ pos: number; age: number }[]>([]);
@@ -102,9 +173,23 @@ export function ScrollIndicator() {
   // Day positions for each activity (fractional 0-1 on the year timeline)
   const dayPositionsRef = useRef<number[]>([]);
   const ratiosRef = useRef<number[]>([]);
+  // Miles ahead (+) / behind (−) of an even pace, indexed by day of year
+  const deviationRef = useRef<Float32Array>(new Float32Array(0));
+  const maxDeviationRef = useRef(1);
   // Per-tick length spring — a light touch of overshoot as ticks grow/shrink,
   // indexed to match dayPositionsRef; entries are created lazily.
   const tickSpringsRef = useRef<{ value: number; velocity: number }[]>([]);
+  // Per-frame tick geometry (reused array) and redraw bookkeeping
+  const tickDrawRef = useRef<{ y: number; len: number; width: number; color: string }[]>([]);
+  const lastDrawRef = useRef<{
+    dot: number;
+    t: number;
+    hover: number | null;
+    idx: number;
+    dev: Float32Array | null;
+    trail: number;
+  }>({ dot: -1, t: -1, hover: null, idx: -1, dev: null, trail: 0 });
+  const graphCacheRef = useRef<{ canvas: HTMLCanvasElement; dev: Float32Array; bufW: number; bufH: number } | null>(null);
 
   useEffect(() => {
     hoverTarget.current = hovered ? 1 : 0;
@@ -172,6 +257,14 @@ export function ScrollIndicator() {
         progress = scrollProgress;
       }
 
+      if (!dotSeeded.current && numAct > 0) {
+        const start = positions[Math.max(0, numAct - INTRO_RUNS)];
+        delayedProgress.current = ghostProgress.current = start;
+        dotVelocity.current = ghostVelocity.current = 0;
+        prevScrollProgress.current = start;
+        dotSeeded.current = true;
+      }
+
       // Detect scroll velocity for dynamic effects
       const scrollDelta = Math.abs(progress - prevScrollProgress.current);
       prevScrollProgress.current = progress;
@@ -213,16 +306,6 @@ export function ScrollIndicator() {
         pulsePhase.current += dt * 3.5;
       }
 
-      // Track width + mask — the vertical line always renders at its full
-      // "hovered" look (constant width, bright mask) so it matches the solid
-      // tick marks instead of dimming/narrowing when not hovered.
-      if (paceTrackRef.current) {
-        paceTrackRef.current.style.width = `4px`;
-        const mask = buildMask(progress, 1);
-        paceTrackRef.current.style.maskImage = mask;
-        paceTrackRef.current.style.webkitMaskImage = mask;
-      }
-
       // Dot velocity magnitude for dynamic glow intensity
       const speed = Math.abs(dotVelocity.current);
       const speedBoost = Math.min(speed * 6, 1);
@@ -260,7 +343,7 @@ export function ScrollIndicator() {
         ghostRef.current.style.opacity = `${Math.min(ghostOpacity, 0.35)}`;
       }
 
-      // Trail canvas — fading wake particles + activity tick marks
+      // Trail canvas — pace graph, activity tick marks, fading wake
       const canvas = trailCanvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext("2d");
@@ -271,28 +354,27 @@ export function ScrollIndicator() {
           const cssH = canvas.clientHeight || 400;
           const bufW = Math.round(cssW * dpr);
           const bufH = Math.round(cssH * dpr);
+          let resized = false;
           if (canvas.width !== bufW || canvas.height !== bufH) {
             canvas.width = bufW;
             canvas.height = bufH;
+            resized = true;
           }
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          ctx.clearRect(0, 0, cssW, cssH);
-
-          // Logical coordinates — draw in CSS pixels
           const h = cssH;
           const cx = cssW / 2;
 
-          // Activity tick marks — horizontal lines that grow near the active dot,
-          // and reach out toward the cursor's side when hover-proximate.
+          // ── Tick springs — always stepped so motion stays continuous ──
+          // Activity tick marks are horizontal lines that grow near the active
+          // dot, and reach out toward the cursor's side when hover-proximate.
           const curIdx = useActivityStore.getState().currentIndex;
           const ratios = ratiosRef.current;
           const dotPos = delayedProgress.current; // spring-delayed position
           const hoverPos = hoveredProgress.current; // mouse position (null when not hovering)
-          const anchorX = cx; // center of the track line
+          const ticks = tickDrawRef.current;
+          ticks.length = positions.length;
+          let ticksMoving = false;
           for (let i = 0; i < positions.length; i++) {
-            const y = positions[i] * h;
             const isCurrent = i === curIdx;
-            const color = ratios[i] !== undefined ? getPaceBandColor(ratios[i]) : "#ffffff";
 
             // Proximity: how close is this tick to the active dot (0-1, 1 = on
             // top), run through the dramatic ease so the active/traveling dot
@@ -329,31 +411,103 @@ export function ScrollIndicator() {
             const springed = springLerp(tickSpring.value, targetLen, tickSpring.velocity, 320, 26, dt);
             tickSpring.value = springed.value;
             tickSpring.velocity = springed.velocity;
-            const tickLen = tickSpring.value;
+            if (Math.abs(springed.velocity) > 0.01 || Math.abs(springed.value - targetLen) > 0.05) {
+              ticksMoving = true;
+            }
 
-            // Ticks are fully opaque and the same solid color whether hovered
-            // or not — hover feedback is length + width only. (Semi-transparent
-            // ticks blended visibly where they overlapped at the dot.)
-            const lineW = isCurrent ? 3 : 2 + hoverProximity * 1;
-
-            ctx.beginPath();
-            ctx.moveTo(anchorX, y);
-            ctx.lineTo(anchorX - tickLen, y);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lineW;
-            ctx.lineCap = "butt";
-            ctx.stroke();
+            // Ticks are run markers — the pace graph carries the color now, so
+            // they stay neutral and brighten near the dot/cursor. The current
+            // run keeps its pace color to tie the tick to the dot.
+            ticks[i] = {
+              y: positions[i] * h,
+              len: tickSpring.value,
+              width: isCurrent ? 2.5 : 1 + hoverProximity * 1,
+              color: isCurrent && ratios[i] !== undefined
+                ? focusColor(getPaceBandColor(ratios[i]))
+                : `rgba(255, 255, 255, ${0.22 + effectiveProximity * 0.5})`,
+            };
           }
 
-          // Trail wake particles
-          for (const point of trailHistory.current) {
-            const alpha = Math.max(0, 1 - point.age / 0.6) * 0.45;
-            const radius = 3 * (1 - point.age / 0.6);
-            const y = point.pos * h;
-            ctx.beginPath();
-            ctx.arc(cx, y, Math.max(0.5, radius), 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-            ctx.fill();
+          // ── Skip the redraw when nothing visible changed ──
+          const dev = deviationRef.current;
+          const last = lastDrawRef.current;
+          const needsDraw =
+            resized ||
+            ticksMoving ||
+            trailHistory.current.length > 0 ||
+            last.trail > 0 ||
+            Math.abs(dotPos - last.dot) > 1e-4 ||
+            Math.abs(t - last.t) > 1e-3 ||
+            hoverPos !== last.hover ||
+            curIdx !== last.idx ||
+            dev !== last.dev;
+
+          if (needsDraw) {
+            last.dot = dotPos;
+            last.t = t;
+            last.hover = hoverPos;
+            last.idx = curIdx;
+            last.dev = dev;
+            last.trail = trailHistory.current.length;
+
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, cssW, cssH);
+
+            // Pace graph — deviation from an even pace over the year. The
+            // baseline is the 1:1 line; the area between it and the curve is
+            // shaded by sign, fading toward the baseline so near-pace stretches
+            // read as quiet and big swings read as saturated. Static, so it's
+            // rendered once into an offscreen canvas and just composited here.
+            if (dev.length > 1) {
+              const cache = graphCacheRef.current;
+              if (!cache || cache.dev !== dev || cache.bufW !== bufW || cache.bufH !== bufH) {
+                graphCacheRef.current = {
+                  canvas: renderGraph(dev, maxDeviationRef.current, cssW, cssH, dpr),
+                  dev,
+                  bufW,
+                  bufH,
+                };
+              }
+              ctx.drawImage(graphCacheRef.current!.canvas, 0, 0, cssW, cssH);
+
+              // Focus falloff — full strength around the active dot, dimmer
+              // toward the ends (brightens on hover)
+              // (the dot travels in the same day-of-year space as the graph)
+              const p = clampEdge(dotPos);
+              const edge = 0.35 + t * 0.4;
+              const focus = ctx.createLinearGradient(0, 0, 0, h);
+              focus.addColorStop(0, `rgba(0,0,0,${edge})`);
+              focus.addColorStop(Math.max(0, p - 0.25), `rgba(0,0,0,${edge})`);
+              focus.addColorStop(Math.max(0, p - 0.04), "rgba(0,0,0,1)");
+              focus.addColorStop(Math.min(1, p + 0.04), "rgba(0,0,0,1)");
+              focus.addColorStop(Math.min(1, p + 0.25), `rgba(0,0,0,${edge})`);
+              focus.addColorStop(1, `rgba(0,0,0,${edge})`);
+              ctx.globalCompositeOperation = "destination-in";
+              ctx.fillStyle = focus;
+              ctx.fillRect(0, 0, cssW, h);
+              ctx.globalCompositeOperation = "source-over";
+            }
+
+            ctx.lineCap = "butt";
+            for (const tick of ticks) {
+              ctx.beginPath();
+              ctx.moveTo(cx, tick.y);
+              ctx.lineTo(cx - tick.len, tick.y);
+              ctx.strokeStyle = tick.color;
+              ctx.lineWidth = tick.width;
+              ctx.stroke();
+            }
+
+            // Trail wake particles
+            for (const point of trailHistory.current) {
+              const alpha = Math.max(0, 1 - point.age / 0.6) * 0.45;
+              const radius = 3 * (1 - point.age / 0.6);
+              const y = point.pos * h;
+              ctx.beginPath();
+              ctx.arc(cx, y, Math.max(0.5, radius), 0, Math.PI * 2);
+              ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+              ctx.fill();
+            }
           }
         }
       }
@@ -383,6 +537,28 @@ export function ScrollIndicator() {
       Math.max(0, Math.min(1, d.dayOfYear / todayDayOfYear))
     );
     ratiosRef.current = data.map((d) => d.ratio);
+
+    // Daily deviation from an even pace — drives the graph
+    const { deviation: raw } = dailyPaceDeviation(activities, yearlyTarget, todayDayOfYear);
+    // Light smoothing for drawing only — a 5-day triangular kernel rounds
+    // off the daily sawtooth without hiding the swings
+    const KERNEL = [1, 2, 3, 2, 1];
+    const dev = new Float32Array(raw.length);
+    let maxAbs = 1;
+    for (let d = 0; d < raw.length; d++) {
+      let sum = 0;
+      let weight = 0;
+      for (let k = 0; k < KERNEL.length; k++) {
+        const j = d + k - 2;
+        if (j < 0 || j >= raw.length) continue;
+        sum += raw[j] * KERNEL[k];
+        weight += KERNEL[k];
+      }
+      dev[d] = sum / weight;
+      maxAbs = Math.max(maxAbs, Math.abs(dev[d]));
+    }
+    deviationRef.current = dev;
+    maxDeviationRef.current = maxAbs;
     // Enforce monotonicity so the tracer never reverses direction.
     // Activities are sorted chronologically (oldest first), but backdated
     // entries or same-day runs can break strict ordering.
@@ -400,17 +576,6 @@ export function ScrollIndicator() {
     }
     return data;
   }, [activities, yearlyTarget, todayDayOfYear]);
-
-  const gradientStops = useMemo(() => {
-    if (paceData.length === 0) return [];
-    return paceData
-      .map((d) => {
-        const t = Math.max(0, Math.min(1, d.dayOfYear / todayDayOfYear));
-        const blend = Math.max(0, Math.min(1, (d.ratio - 0.8) / 0.4));
-        return { offset: t, blend };
-      })
-      .sort((a, b) => a.offset - b.offset);
-  }, [paceData, todayDayOfYear]);
 
   const scrollToProgress = useCallback(
     (clientY: number) => {
@@ -473,13 +638,13 @@ export function ScrollIndicator() {
   if (totalRuns === 0) return null;
 
   const currentColor = paceData[currentIndex]
-    ? getPaceBandColor(paceData[currentIndex].ratio)
+    ? focusColor(getPaceBandColor(paceData[currentIndex].ratio))
     : BEHIND_COLOR;
 
   return (
     <div
       ref={trackRef}
-      className="absolute right-4 top-1/2 h-[80vh] w-32 md:w-44 pointer-events-auto cursor-pointer select-none"
+      className="absolute right-6 md:right-10 top-1/2 h-[80vh] w-32 md:w-44 pointer-events-auto cursor-pointer select-none"
       style={{ transform: "translateY(-50%) scaleY(-1)" }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
@@ -510,21 +675,19 @@ export function ScrollIndicator() {
           }
         }}
         style={{ transform: "scaleY(-1)" }}
-        className={`absolute right-1/2 -bottom-12 text-[11px] font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-200 cursor-pointer ${
+        className={`absolute left-1/2 -translate-x-1/2 -bottom-9 pl-[0.1em] text-[11px] leading-none font-mono uppercase tracking-widest whitespace-nowrap transition-colors duration-200 cursor-pointer ${
           currentIndex >= totalRuns
             ? "text-neutral-200"
             : "text-neutral-600 hover:text-neutral-400"
         }`}
       >
+        {/* Centered over the line; pl offsets tracking's trailing space.
+            The main dot sits right below at the track's end, so no extra pip. */}
         Today
-        {currentIndex >= totalRuns && (
-          <div className="absolute right-0 -bottom-1.5 w-1 h-1 rounded-full bg-neutral-200" />
-        )}
       </button>
 
-      {/* Base track — subtle, barely-there line with sharp (square) ends.
-          Matches the pace track's width so they align. */}
-      <div className="absolute left-1/2 -translate-x-1/2 w-[4px] h-full bg-white/4 z-0" />
+      {/* Baseline — the 1:1 "on pace" line the graph swings around */}
+      <div className="absolute left-1/2 -translate-x-1/2 w-px h-full bg-white/15 z-0" />
 
       {/* Trail canvas — fading wake particles behind the dot */}
       <canvas
@@ -532,45 +695,6 @@ export function ScrollIndicator() {
         className="absolute left-1/2 -translate-x-1/2 h-full pointer-events-none z-2"
         style={{ width: "140px" }}
       />
-
-      {/* Colored pace track — width + mask interpolated by rAF */}
-      <div
-        ref={paceTrackRef}
-        className="absolute left-1/2 -translate-x-1/2 h-full overflow-hidden z-1"
-        style={{ width: "4px", willChange: "width" }}
-      >
-        <svg
-          width="3"
-          height="100%"
-          viewBox="0 0 3 100"
-          preserveAspectRatio="none"
-          className="w-full h-full"
-        >
-          <defs>
-            <linearGradient id="paceGradient" x1="0" y1="0" x2="0" y2="1">
-              {gradientStops.length > 0 ? (
-                gradientStops.map((stop, i) => (
-                  <stop
-                    key={i}
-                    offset={`${stop.offset * 100}%`}
-                    stopColor={
-                      stop.blend > 0.6
-                        ? AHEAD_COLOR
-                        : stop.blend < 0.4
-                          ? BEHIND_COLOR
-                          : NEUTRAL_COLOR
-                    }
-                    stopOpacity={1}
-                  />
-                ))
-              ) : (
-                <stop offset="0%" stopColor={NEUTRAL_COLOR} />
-              )}
-            </linearGradient>
-          </defs>
-          <rect x="0" y="0" width="3" height="100" fill="url(#paceGradient)" />
-        </svg>
-      </div>
 
       {/* Ghost dot — the faintest trailing shadow */}
       <div
@@ -615,7 +739,7 @@ export function ScrollIndicator() {
               <motion.span
                 variants={{
                   initial: { opacity: 0, y: 6, filter: "blur(3px)" },
-                  animate: { opacity: 0.85, y: 0, filter: "blur(0px)", transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
+                  animate: { opacity: 1, y: 0, filter: "blur(0px)", transition: { duration: 0.3, ease: [0.25, 0.1, 0.25, 1] } },
                   exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } },
                 }}
                 className="text-base font-medium tabular-nums tracking-wide"
@@ -629,7 +753,7 @@ export function ScrollIndicator() {
               <motion.span
                 variants={{
                   initial: { opacity: 0, y: 6, filter: "blur(3px)" },
-                  animate: { opacity: 0.3, y: 0, filter: "blur(0px)", transition: { duration: 0.3, delay: 0.025, ease: [0.25, 0.1, 0.25, 1] } },
+                  animate: { opacity: 0.5, y: 0, filter: "blur(0px)", transition: { duration: 0.3, delay: 0.025, ease: [0.25, 0.1, 0.25, 1] } },
                   exit: { opacity: 0, y: -4, filter: "blur(3px)", transition: { duration: 0.18, ease: [0.25, 0.1, 0.25, 1] } },
                 }}
                 className="text-sm font-light"

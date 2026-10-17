@@ -12,6 +12,10 @@ import { PhotoPins } from "./PhotoPins";
 import { getRouteColor } from "@/lib/colors";
 import { useActivityStore } from "@/stores/activityStore";
 import { wasPanDrag } from "./CameraPan";
+import { cardPoses, parallax } from "./motionState";
+
+// Lower = neighbors linger longer while crossing (was 1.2: fully hand-off)
+const VISIBILITY_FALLOFF = 0.8;
 
 interface RunCardProps {
   activity: StravaActivity;
@@ -22,6 +26,8 @@ interface RunCardProps {
   paceRatio: number;
   prevPaceRatio: number;
   isFocused: boolean;
+  showMap: boolean;
+  showRoute: boolean;
   onSelect: () => void;
 }
 
@@ -34,11 +40,15 @@ export function RunCard({
   paceRatio,
   prevPaceRatio,
   isFocused,
+  showMap,
+  showRoute,
   onSelect,
 }: RunCardProps) {
   const scroll = useScroll();
   const groupRef = useRef<THREE.Group>(null!);
   const [hovered, setHovered] = useState(false);
+  // Shared with RouteGeometry so the line draws on as the card comes into focus
+  const visibilityRef = useRef(0);
   const decodedRoute = useActivityStore((s) => s.decodedRoutes.get(activity.id));
 
   // totalSlots = N (N activities, Today sits at offset 1 after all of them)
@@ -71,20 +81,28 @@ export function RunCard({
     // How far this run is from the current scroll center (0 = centered, 1 = far)
     const distFromCenter = Math.abs(scroll.offset - scrollCenter) / scrollSegment;
 
-    // Visibility: sharp falloff so only the focused run is prominent
+    // Visibility: falloff wide enough that neighbors overlap mid-transition
+    // (both ~35% at the halfway point) for a crossfade, not a hand-off
     const visibility = THREE.MathUtils.clamp(
-      1 - distFromCenter * 1.2,
+      1 - distFromCenter * VISIBILITY_FALLOFF,
       0,
       1
     );
+    visibilityRef.current = visibility;
 
     // Scale: runs grow as they approach center
     const scale = THREE.MathUtils.lerp(0.3, 1.0, visibility);
     groupRef.current.scale.setScalar(scale);
 
-    // Opacity — cubic curve for aggressive fade on neighbors
-    const vis = Math.pow(visibility, 3.0);
-    groupRef.current.traverse((child) => {
+    // Opacity — hold full strength through the first half-step and fade only
+    // in the second, so outgoing and incoming runs are both at full strength
+    // mid-transition (maximum overlap) and nothing lingers once settled
+    const vis = 1 - THREE.MathUtils.smoothstep(distFromCenter, 0.5, 1.0);
+
+    // Fully faded runs are skipped entirely — otherwise every mounted map
+    // and tube is still submitted to the GPU at zero opacity
+    groupRef.current.visible = vis > 0.002;
+    if (groupRef.current.visible) groupRef.current.traverse((child) => {
       if ((child as THREE.Mesh).material) {
         const mat = (child as THREE.Mesh).material as THREE.Material & {
           opacity: number;
@@ -126,10 +144,28 @@ export function RunCard({
     }
 
     // Subtle rotation when off-center + kick
-    groupRef.current.rotation.y = (1 - visibility) * 0.15 + k.ry;
-    groupRef.current.rotation.x = (1 - visibility) * -0.05;
+    // Pointer tilt — the whole run (route + map together, so the line stays
+    // registered to its streets) leans toward the cursor; weighted by
+    // visibility so only the run in front moves
+    const tiltX = parallax.x * visibility;
+    const tiltY = parallax.y * visibility;
+    groupRef.current.rotation.y = (1 - visibility) * 0.15 + k.ry + tiltY;
+    groupRef.current.rotation.x = (1 - visibility) * -0.05 + tiltX;
     groupRef.current.rotation.z = k.rz;
     groupRef.current.position.z = zPosition + k.z;
+
+    // Publish the pose so the morph line can match this card exactly
+    const worldZ = (groupRef.current.parent?.position.z ?? 0) + groupRef.current.position.z;
+    const pose = cardPoses.get(index);
+    if (pose) {
+      pose.rx = groupRef.current.rotation.x;
+      pose.ry = groupRef.current.rotation.y;
+      pose.rz = k.rz;
+      pose.z = worldZ;
+      pose.scale = scale;
+    } else {
+      cardPoses.set(index, { rx: groupRef.current.rotation.x, ry: groupRef.current.rotation.y, rz: k.rz, z: worldZ, scale });
+    }
   });
 
   const handleClick = (e: ThreeEvent<MouseEvent>) => {
@@ -152,22 +188,24 @@ export function RunCard({
         document.body.style.cursor = "default";
       }}
     >
-      {activity.map.summary_polyline ? (
+      {!showRoute ? null : activity.map.summary_polyline ? (
         <RouteGeometry
           activityId={activity.id}
           polyline={activity.map.summary_polyline}
           color={color}
           colorEnd={colorEnd}
           showTracer={isFocused}
+          visibilityRef={visibilityRef}
           averageSpeed={activity.average_speed}
           maxSpeed={activity.max_speed}
         />
       ) : (
         <PlaceholderGeometry color={color} colorEnd={colorEnd} showTracer={isFocused} />
       )}
-      {decodedRoute?.normParams && decodedRoute.points.length > 0 && (
+      {showMap && decodedRoute?.normParams && decodedRoute.points.length > 0 && (
         <MapOverlay
           activityId={activity.id}
+          tint={color}
           rawPoints={decodedRoute.points}
           normParams={decodedRoute.normParams}
         />

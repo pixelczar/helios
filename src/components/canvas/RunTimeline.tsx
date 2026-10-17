@@ -5,11 +5,25 @@ import { useScroll } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { RunCard } from "./RunCard";
+import { MorphRoute } from "./MorphRoute";
+import { morphState, parallax } from "./motionState";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 import { isSnapLocked } from "@/lib/scrollLock";
+import { INTRO_RUNS } from "@/lib/timeline";
 
 const RUN_SPACING = 20;
+// Only runs this close to the focused one keep a basemap mounted — each map
+// is a multi-megapixel texture, and every other run is invisible anyway
+const MAP_WINDOW = 2;
+// Route geometry is built only near focus too — a card fades to zero one
+// step away, so building all ~90 routes up front just stalled the load
+const ROUTE_WINDOW = 3;
+// Pointer parallax — max lean of the focused run toward the cursor (radians)
+// and how quickly it follows
+const TILT_X = 0.035;
+const TILT_Y = 0.05;
+const TILT_FOLLOW = 5;
 
 export function RunTimeline() {
   const scroll = useScroll();
@@ -188,26 +202,64 @@ export function RunTimeline() {
   // Spring state for Z-axis
   const zSpring = useRef({ value: 0, velocity: 0, initialized: false });
 
-  useFrame((_, delta) => {
+  // Fine pointers only, and never with reduced motion
+  const tiltEnabled = useRef(false);
+  useEffect(() => {
+    tiltEnabled.current =
+      window.matchMedia("(pointer: fine)").matches &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+
+  useFrame((state, delta) => {
     if (!groupRef.current || activities.length === 0) return;
+
+    // Smoothed pointer tilt, shared with the cards and the morph line
+    const follow = 1 - Math.exp(-TILT_FOLLOW * Math.min(delta, 0.05));
+    const targetX = tiltEnabled.current ? -state.pointer.y * TILT_X : 0;
+    const targetY = tiltEnabled.current ? state.pointer.x * TILT_Y : 0;
+    parallax.x += (targetX - parallax.x) * follow;
+    parallax.y += (targetY - parallax.y) * follow;
 
     const totalDepth = totalSlots * RUN_SPACING;
     const targetZ = scroll.offset * totalDepth;
     const sp = zSpring.current;
 
+    // Feed drei's damping target (scroll.scroll) from the real scroll position
+    // every frame. drei derives it from a scroll range it measures once at
+    // connect time, so after a resize it drifts and the focused run settles
+    // off its slot (too close to the camera). Until the initial jump to Today
+    // lands, pin it to Today so the intro never drifts toward the oldest run.
+    const scrollTarget = (scroll as typeof scroll & { scroll: { current: number } }).scroll;
+    const el = scroll.el;
+    const scrollable = el.scrollHeight - el.clientHeight;
+    // drei's scroll state is mutable by design (it's read/written per frame)
+    // eslint-disable-next-line react-hooks/immutability
+    scrollTarget.current = !initializedScroll.current
+      ? 1
+      : scrollable > 0 ? el.scrollTop / scrollable : 0;
+
     if (!sp.initialized) {
-      sp.value = targetZ;
+      // Intro: start a few runs short of Today and let drei's damping glide
+      // the rest of the way
+      const startOffset = Math.max(0, totalSlots - INTRO_RUNS) / Math.max(totalSlots, 1);
+      // eslint-disable-next-line react-hooks/immutability
+      scroll.offset = startOffset;
+      sp.value = startOffset * totalDepth;
       sp.initialized = true;
     }
 
     const dt = Math.min(delta, 0.04);
-    const stiffness = 120;
-    const damping = 20;
+    const stiffness = 320;
+    const damping = 36; // ~critically damped — quick settle, no overshoot
     const force = stiffness * (targetZ - sp.value) - damping * sp.velocity;
     sp.velocity += force * dt;
     sp.value += sp.velocity * dt;
 
     groupRef.current.position.z = sp.value;
+    // When the scene is paused (frameloop "demand" under the dashboard),
+    // keep frames coming until the spring settles
+    if (Math.abs(sp.velocity) > 1e-3 || Math.abs(targetZ - sp.value) > 1e-3) state.invalidate();
+    morphState.timelineIndex = sp.value / RUN_SPACING;
 
     // rawIndex: 0 = oldest, N-1 = newest, N = Today
     const rawIndex = scroll.offset * totalSlots;
@@ -217,6 +269,8 @@ export function RunTimeline() {
   });
 
   return (
+    <>
+    <MorphRoute activities={activities} paceRatios={paceRatios} totalSlots={totalSlots} />
     <group ref={groupRef}>
       {activities.map((activity, index) => (
         <RunCard
@@ -229,9 +283,12 @@ export function RunTimeline() {
           paceRatio={paceRatios[index]}
           prevPaceRatio={index > 0 ? paceRatios[index - 1] : paceRatios[index]}
           isFocused={index === currentIndex}
+          showMap={Math.abs(index - currentIndex) <= MAP_WINDOW}
+          showRoute={Math.abs(index - currentIndex) <= ROUTE_WINDOW}
           onSelect={() => scrollToIndex(index)}
         />
       ))}
     </group>
+    </>
   );
 }

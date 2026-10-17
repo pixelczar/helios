@@ -162,7 +162,7 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
 
   return (
     <>
-      <div className="flex gap-1.5 mt-6">
+      <div className="flex gap-1.5 mt-12">
         {isLoading && thumbnails.length === 0
           ? Array.from({ length: Math.min(photoCount, 4) }).map((_, i) => (
               <div
@@ -178,7 +178,7 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
                   key={photo.unique_id}
                   layoutId={`photo-${photo.unique_id}`}
                   onClick={() => setExpandedIndex(i)}
-                  className="w-20 h-20 rounded-lg overflow-hidden border-0 border-white/40 cursor-pointer ring-1 ring-inset ring-black/50"
+                  className="group relative w-20 h-20 rounded-lg overflow-hidden cursor-pointer after:absolute after:inset-0 after:rounded-lg after:ring-1 after:ring-inset after:ring-white/10 hover:after:ring-white/25 after:transition-[box-shadow] after:duration-300 after:pointer-events-none"
                   initial={
                     reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }
                   }
@@ -196,7 +196,7 @@ export function PhotoStrip({ activityId, photoCount }: PhotoStripProps) {
                   <img
                     src={url}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover saturate-[0.7] brightness-90 group-hover:saturate-100 group-hover:brightness-100 transition-[filter] duration-300"
                     loading="lazy"
                   />
                 </motion.button>

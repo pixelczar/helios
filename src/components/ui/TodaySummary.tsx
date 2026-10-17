@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useMemo } from "react";
 import { motion, useReducedMotion } from "framer-motion";
 import { useActivityStore } from "@/stores/activityStore";
 import {
@@ -9,7 +9,9 @@ import {
   calculateYearlyPaceAtDate,
 } from "@/stores/goalStore";
 import { useSettingsStore } from "@/stores/settingsStore";
-import { fetchMapImage } from "@/lib/geo/mapTiles";
+import { lockSnap } from "@/lib/scrollLock";
+import { RouteHeatmap, type HeatmapRoute } from "./RouteHeatmap";
+import { RollingNumber } from "./RollingNumber";
 import { formatDistance } from "@/lib/format";
 import { getPaceBandColor } from "@/lib/colors";
 import { useActivityPhotos } from "@/hooks/useActivityPhotos";
@@ -30,17 +32,15 @@ function itemVariants(i: number, reducedMotion: boolean | null) {
     };
   }
   return {
-    initial: { opacity: 0, y: 14, filter: "blur(4px)" },
+    initial: { opacity: 0, y: 14 },
     animate: {
       opacity: 1,
       y: 0,
-      filter: "blur(0px)",
       transition: { duration: 0.45, delay: i * STAGGER, ease: EASE },
     },
     exit: {
       opacity: 0,
       y: -10,
-      filter: "blur(4px)",
       transition: { duration: 0.3, delay: i * 0.03, ease: EASE },
     },
   };
@@ -58,12 +58,11 @@ function tileVariants(i: number, reducedMotion: boolean | null) {
     };
   }
   return {
-    initial: { opacity: 0, y: 26, scale: 0.94, filter: "blur(8px)" },
+    initial: { opacity: 0, y: 26, scale: 0.94 },
     animate: {
       opacity: 1,
       y: 0,
       scale: 1,
-      filter: "blur(0px)",
       transition: { duration: 0.75, delay: 1.1 + i * 0.14, ease: EASE },
     },
   };
@@ -72,41 +71,9 @@ function tileVariants(i: number, reducedMotion: boolean | null) {
 export function TodaySummary() {
   const reducedMotion = useReducedMotion();
   const activities = useActivityStore((s) => s.activities);
-  const decodedRoutes = useActivityStore((s) => s.decodedRoutes);
   const yearlyTarget = useGoalStore((s) => s.yearlyTarget);
   const goals = useGoalStore((s) => s.goals);
   const hiddenGoalIds = useSettingsStore((s) => s.hiddenGoalIds);
-
-  const [mapUrl, setMapUrl] = useState<string | null>(null);
-  const mapUrlRef = useRef<string | null>(null);
-
-  // Fetch map tiles from most recent activity with a polyline
-  useEffect(() => {
-    const activity = [...activities].reverse().find((a) => a.map.summary_polyline);
-    if (!activity) return;
-
-    const route = decodedRoutes.get(activity.id);
-    if (!route) return;
-
-    let cancelled = false;
-    fetchMapImage(activity.id, route.points).then((result) => {
-      if (cancelled || !result) return;
-      result.canvas.toBlob((blob) => {
-        if (cancelled || !blob) return;
-        const url = URL.createObjectURL(blob);
-        mapUrlRef.current = url;
-        setMapUrl(url);
-      });
-    });
-
-    return () => {
-      cancelled = true;
-      if (mapUrlRef.current) {
-        URL.revokeObjectURL(mapUrlRef.current);
-        mapUrlRef.current = null;
-      }
-    };
-  }, [activities, decodedRoutes]);
 
   const todayData = useMemo(() => {
     const now = new Date();
@@ -169,6 +136,34 @@ export function TodaySummary() {
     [recentRuns, activities, yearlyTarget]
   );
 
+  // Route heatmap backdrop — every run this year, in its pace color
+  const decodedRoutes = useActivityStore((s) => s.decodedRoutes);
+  const heatmapRoutes = useMemo<HeatmapRoute[]>(() => {
+    const year = new Date().getFullYear();
+    return activities.flatMap((a) => {
+      const date = new Date(a.start_date_local);
+      const route = decodedRoutes.get(a.id);
+      if (date.getFullYear() !== year || !route || route.points.length < 2) return [];
+      const { ratio } = calculateYearlyPaceAtDate(activities, yearlyTarget, date);
+      return [{ id: a.id, points: route.points, color: getPaceBandColor(ratio) }];
+    });
+  }, [activities, decodedRoutes, yearlyTarget]);
+
+  const [highlightId, setHighlightId] = useState<number | null>(null);
+
+  // Jump the timeline to a run (same mechanism as the indicator's Today link)
+  const jumpToRun = (runId: number) => {
+    const index = activities.findIndex((a) => a.id === runId);
+    const container = Array.from(document.querySelectorAll("div")).find((el) => {
+      const style = window.getComputedStyle(el);
+      return (style.overflowY === "auto" || style.overflowY === "scroll") && el.scrollHeight > el.clientHeight + 100;
+    });
+    if (index < 0 || !container || activities.length === 0) return;
+    lockSnap();
+    const scrollable = container.scrollHeight - container.clientHeight;
+    container.scrollTo({ top: (index / activities.length) * scrollable, behavior: "smooth" });
+  };
+
   return (
     <motion.div
       initial="initial"
@@ -176,34 +171,14 @@ export function TodaySummary() {
       exit="exit"
       className="fixed inset-0 z-5 flex items-center justify-center pointer-events-none"
     >
-      {/* Map background layer */}
-      <div className="absolute inset-0" aria-hidden="true">
-        {mapUrl && (
-          <motion.div
-            initial={reducedMotion ? { opacity: 0.75 } : { opacity: 0, scale: 1.02 }}
-            animate={reducedMotion ? { opacity: 0.75 } : { opacity: 0.75, scale: 1 }}
-            transition={{ duration: 1.5, ease: EASE }}
-            className="absolute inset-0"
-            style={{
-              backgroundImage: `url(${mapUrl})`,
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              filter: "saturate(0.7)",
-            }}
-          />
-        )}
-        {/* Edge vignette */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.35) 80%, rgba(0,0,0,0.85) 100%)",
-          }}
-        />
-      </div>
+      <RouteHeatmap
+        routes={heatmapRoutes}
+        highlightId={highlightId}
+        reducedMotion={reducedMotion}
+      />
 
-      {/* Content — pushed above center */}
-      <div className="relative z-10 px-4 -mt-[12vh] flex flex-col items-center">
+      {/* Headline stats — pinned to the top band, above the map */}
+      <div className="absolute top-[7vh] inset-x-0 z-10 px-4 flex flex-col items-center">
         {/* Date */}
         <motion.p
           variants={itemVariants(0, reducedMotion)}
@@ -219,8 +194,8 @@ export function TodaySummary() {
         >
           {/* Day of year column */}
           <div className="flex flex-col items-end gap-2">
-            <span className="text-6xl md:text-9xl font-black tracking-tighter text-neutral-400 leading-none">
-              {todayData.dayOfYear}
+            <span className="text-5xl font-black tracking-tighter text-neutral-400 leading-none">
+              <RollingNumber value={String(todayData.dayOfYear)} delay={STAGGER} reducedMotion={reducedMotion} />
             </span>
             <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1 not-italic">
               Days
@@ -228,20 +203,20 @@ export function TodaySummary() {
           </div>
 
           {/* Separator */}
-          <span className="text-3xl md:text-5xl font-light text-neutral-700 mb-16">
+          <span className="text-2xl font-light text-neutral-700 mb-9">
             /
           </span>
 
           {/* Total miles column */}
           <div className="flex flex-col items-end gap-2">
             <span
-              className="text-6xl md:text-9xl font-black tracking-tighter leading-none"
+              className="text-5xl font-black tracking-tighter leading-none"
               style={{
                 color: deltaColor,
                 textShadow: `0 0 40px ${deltaColor}20`,
               }}
             >
-              {todayData.totalMiles.toFixed(1)}
+              <RollingNumber value={todayData.totalMiles.toFixed(1)} delay={STAGGER + 0.08} reducedMotion={reducedMotion} />
             </span>
             <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1 not-italic">
               Total Miles
@@ -294,109 +269,139 @@ export function TodaySummary() {
           </motion.div>
         )}
 
-        {/* Recent runs — a long beat after everything else, then a heavy
-            overlapping cascade (each tile animates independently) */}
-        {recentRuns.length > 0 && (
-          <div className="flex items-stretch gap-4 mt-24">
-            {recentRuns.map((run, i) => (
-              <motion.div key={run.id} variants={tileVariants(i, reducedMotion)}>
-                <RecentRunTile
-                  run={run}
-                  ratio={recentRunRatios[i]}
-                  index={i}
-                  reducedMotion={reducedMotion}
-                />
-              </motion.div>
-            ))}
-          </div>
-        )}
       </div>
+
+      {/* Recent runs — a quiet ledger along the bottom, pinned to the graph */}
+      {recentRuns.length > 0 && (
+        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10 flex items-center">
+          {recentRuns.map((run, i) => (
+            <motion.div
+              key={run.id}
+              variants={tileVariants(i, reducedMotion)}
+              className="flex items-center"
+            >
+              {i > 0 && <span className="w-px h-16 mx-12 bg-white/10" aria-hidden="true" />}
+              <RecentRunItem
+                run={run}
+                ratio={recentRunRatios[i]}
+                index={i}
+                reducedMotion={reducedMotion}
+                highlighted={highlightId === run.id}
+                onHover={(on) => setHighlightId(on ? run.id : null)}
+                onSelect={() => jumpToRun(run.id)}
+              />
+            </motion.div>
+          ))}
+        </div>
+      )}
     </motion.div>
   );
 }
 
-function RecentRunTile({
+function RecentRunItem({
   run,
   ratio,
   index,
   reducedMotion,
+  highlighted,
+  onHover,
+  onSelect,
 }: {
   run: StravaActivity;
   ratio: number;
   index: number;
   reducedMotion: boolean | null;
+  highlighted: boolean;
+  onHover: (on: boolean) => void;
+  onSelect: () => void;
 }) {
   const color = getPaceBandColor(ratio);
   const decodedRoutes = useActivityStore((s) => s.decodedRoutes);
   const route = decodedRoutes.get(run.id);
   const { photos } = useActivityPhotos(run.id, run.total_photo_count);
-  const thumbs = photos.slice(0, 2);
+  const thumb = photos[0];
+  const [photoHover, setPhotoHover] = useState(false);
+  const thumbUrl = thumb ? thumb.urls?.["600"] || Object.values(thumb.urls)[0] : null;
 
   const dateLabel = new Date(run.start_date_local).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
   });
 
-  // Route draws itself in, staggered to roughly land as the card fades up.
-  const drawDelay = 1.2 + index * 0.14;
-
   return (
-    <div className="relative w-44 md:w-52 rounded-2xl border border-white/5 bg-black/35 backdrop-blur-2xl overflow-hidden p-5 flex flex-col items-center gap-4">
-      {/* Date — top of the card */}
-      <span className="text-xs font-mono uppercase tracking-[0.2em] text-neutral-500">
-        {dateLabel}
-      </span>
-
-      {/* Minimap — larger and more visible, with a tracer that loops around
-          the route (matching the base landing animation) */}
-      <div className="w-full flex justify-center">
-        {route && route.normalized.length > 1 ? (
+    <button
+      type="button"
+      onMouseEnter={() => onHover(true)}
+      onMouseLeave={() => onHover(false)}
+      onFocus={() => onHover(true)}
+      onBlur={() => onHover(false)}
+      onClick={onSelect}
+      className={`pointer-events-auto flex items-center gap-4 px-5 py-1 cursor-pointer transition-opacity duration-300 outline-none ${
+        highlighted ? "opacity-100" : "opacity-70 hover:opacity-100"
+      }`}
+    >
+      <div className="w-24 h-24 shrink-0">
+        {route && route.normalized.length > 1 && (
           <CardRouteTrace
             points={route.normalized.map(([x, y]) => `${x},${-y}`).join(" ")}
             color={color}
-            drawDelay={drawDelay}
+            drawDelay={1.2 + index * 0.14}
             reducedMotion={reducedMotion}
+            className="w-full h-full"
           />
-        ) : (
-          <div className="h-28 md:h-32" />
         )}
       </div>
 
-      {/* Mileage — the hero of the card */}
-      <span className="text-5xl md:text-6xl font-black italic tracking-tighter text-foreground leading-none">
-        {formatDistance(run.distance)}
-        <span className="text-sm text-neutral-500 ml-1.5 font-normal not-italic tracking-wide">
-          mi
+      <div className="flex flex-col items-start gap-2.5">
+        <span className="text-5xl font-black italic tracking-tighter text-foreground leading-none tabular-nums">
+          {formatDistance(run.distance)}
+          <span className="text-sm text-neutral-500 ml-1.5 font-normal not-italic tracking-wide">mi</span>
         </span>
-      </span>
+        <span className="text-xs font-mono uppercase tracking-[0.2em] text-neutral-500 leading-none">
+          {dateLabel}
+        </span>
+      </div>
 
-      {/* Photo thumbnails — max of two, split 50/50 across the row, borderless */}
-      {thumbs.length > 0 && (
-        <div className="grid grid-cols-2 gap-2 w-full">
-          {thumbs.map((photo) => {
-            const url = photo.urls?.["600"] || Object.values(photo.urls)[0];
-            if (!url) return null;
-            return (
-              <div
-                key={photo.unique_id}
-                className="aspect-square w-full rounded-md overflow-hidden"
-              >
-                <img
-                  src={url}
-                  alt=""
-                  className="w-full h-full object-cover"
-                  loading="lazy"
-                />
-              </div>
-            );
-          })}
-        </div>
+      {thumbUrl && (
+        <span
+          className="relative shrink-0"
+          onMouseEnter={() => {
+            setPhotoHover(true);
+            onHover(true); // full-strength item (the preview inherits its opacity) + map highlight
+          }}
+          onMouseLeave={() => setPhotoHover(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={thumbUrl}
+            alt=""
+            loading="lazy"
+            className={`w-14 h-14 rounded-lg object-cover transition-[filter] duration-300 ${
+              highlighted ? "saturate-100 brightness-100" : "saturate-[0.6] brightness-75"
+            }`}
+          />
+          {/* Large preview — rises from the thumbnail, like the photo pins */}
+          <motion.span
+            className="absolute left-1/2 bottom-full mb-4 w-72 aspect-[4/3] rounded-2xl overflow-hidden bg-neutral-900 shadow-[0_16px_48px_rgba(0,0,0,0.7)] pointer-events-none after:absolute after:inset-0 after:rounded-2xl after:ring-1 after:ring-inset after:ring-white/15"
+            style={{ x: "-50%", transformOrigin: "50% 100%" }}
+            initial={false}
+            animate={
+              photoHover
+                ? { opacity: 1, y: 0, scale: 1 }
+                : { opacity: 0, y: 6, scale: 0.94 }
+            }
+            transition={{ duration: photoHover ? 0.28 : 0.18, ease: [0.16, 1, 0.3, 1] }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={thumbUrl} alt="" className="w-full h-full object-cover" draggable={false} />
+          </motion.span>
+        </span>
       )}
-    </div>
+    </button>
   );
 }
 
-// A card minimap: the full route drawn in faintly, plus a bright short
+// A route glyph: the full route drawn in faintly, plus a bright short
 // segment that continuously loops around it — the "tracer" effect. Uses
 // framer-motion's normalized pathLength/pathSpacing/pathOffset so no manual
 // getTotalLength math is needed.
@@ -405,11 +410,13 @@ function CardRouteTrace({
   color,
   drawDelay,
   reducedMotion,
+  className = "w-full h-28 md:h-32",
 }: {
   points: string;
   color: string;
   drawDelay: number;
   reducedMotion: boolean | null;
+  className?: string;
 }) {
   const shared = {
     points,
@@ -424,14 +431,14 @@ function CardRouteTrace({
     <svg
       viewBox="-2.9 -2.9 5.8 5.8"
       preserveAspectRatio="xMidYMid meet"
-      className="w-full h-28 md:h-32"
+      className={className}
       aria-hidden="true"
     >
       {/* Base route — draws itself in once, then holds (visible enough to
           read the shape, still quieter than the tracer) */}
       <motion.polyline
         {...shared}
-        opacity={0.32}
+        opacity={0.6}
         initial={reducedMotion ? { pathLength: 1 } : { pathLength: 0 }}
         animate={{ pathLength: 1 }}
         transition={{
@@ -441,24 +448,33 @@ function CardRouteTrace({
         }}
       />
 
-      {/* Tracer — a bright short segment looping around the route */}
-      {!reducedMotion && (
-        <motion.polyline
-          {...shared}
-          strokeWidth={0.22}
-          style={{ filter: `drop-shadow(0 0 3px ${color})` }}
-          initial={{ pathLength: 0.08, pathSpacing: 1, pathOffset: 0 }}
-          animate={{ pathOffset: [0, 1] }}
-          transition={{
-            pathOffset: {
-              duration: 2.6,
-              repeat: Infinity,
-              ease: "linear",
-              delay: drawDelay + 1.2,
-            },
-          }}
-        />
-      )}
+      {/* Tracer — a bright short segment looping around the route, over a
+          wider soft underlay for the glow (instead of a CSS drop-shadow,
+          which repaints a filter every frame of the loop) */}
+      {!reducedMotion &&
+        [
+          { width: 0.75, opacity: 0.4, stroke: color },
+          { width: 0.26, opacity: 1, stroke: color },
+          { width: 0.1, opacity: 0.9, stroke: "#ffffff" }, // hot core
+        ].map(({ width, opacity, stroke }) => (
+          <motion.polyline
+            key={width}
+            {...shared}
+            stroke={stroke}
+            strokeWidth={width}
+            opacity={opacity}
+            initial={{ pathLength: 0.08, pathSpacing: 1, pathOffset: 0 }}
+            animate={{ pathOffset: [0, 1] }}
+            transition={{
+              pathOffset: {
+                duration: 2.6,
+                repeat: Infinity,
+                ease: "linear",
+                delay: drawDelay + 1.2,
+              },
+            }}
+          />
+        ))}
     </svg>
   );
 }

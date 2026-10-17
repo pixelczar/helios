@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { RollingNumber } from "./RollingNumber";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
 import { PhotoStrip } from "./PhotoStrip";
 import {
@@ -11,7 +12,7 @@ import {
   formatElevation,
 } from "@/lib/format";
 
-const STAGGER = 0.06;
+const STAGGER = 0.035;
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
 function itemVariants(i: number, reducedMotion: boolean | null) {
@@ -28,13 +29,13 @@ function itemVariants(i: number, reducedMotion: boolean | null) {
       opacity: 1,
       y: 0,
       filter: "blur(0px)",
-      transition: { duration: 0.45, delay: i * STAGGER, ease: EASE },
+      transition: { duration: 0.3, delay: i * STAGGER, ease: EASE },
     },
     exit: {
       opacity: 0,
       y: -10,
       filter: "blur(4px)",
-      transition: { duration: 0.3, delay: i * 0.03, ease: EASE },
+      transition: { duration: 0.15, delay: i * 0.01, ease: EASE },
     },
   };
 }
@@ -45,8 +46,9 @@ export function RunStats() {
 
   if (!currentActivity) return null;
 
+  // No "wait" mode — outgoing stats fade while the next ones rise in
   return (
-    <AnimatePresence mode="wait">
+    <AnimatePresence>
       <motion.div
         key={currentActivity.id}
         initial="initial"
@@ -57,7 +59,7 @@ export function RunStats() {
         {/* Date */}
         <motion.p
           variants={itemVariants(0, reducedMotion)}
-          className="text-[12px] font-mono uppercase tracking-[0.2em] text-neutral-500 mb-4"
+          className="text-[12px] font-mono uppercase tracking-[0.2em] text-neutral-500 mb-6"
         >
           {formatDate(currentActivity.start_date_local)}
         </motion.p>
@@ -65,7 +67,7 @@ export function RunStats() {
         {/* Run name */}
         <motion.p
           variants={itemVariants(1, reducedMotion)}
-          className="text-[12px] italic font-sans uppercase tracking-widest text-neutral-400 mb-2"
+          className="text-base md:text-xl italic font-sans uppercase tracking-wider text-neutral-300 leading-tight mb-6"
         >
           {currentActivity.name}
         </motion.p>
@@ -74,7 +76,7 @@ export function RunStats() {
         {!currentActivity.map.summary_polyline && (
           <motion.p
             variants={itemVariants(1, reducedMotion)}
-            className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-2"
+            className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-6"
           >
             Indoor run
           </motion.p>
@@ -83,16 +85,20 @@ export function RunStats() {
         {/* Distance — big, fat, italic */}
         <motion.p
           variants={itemVariants(2, reducedMotion)}
-          className="text-6xl md:text-9xl font-black italic text-foreground tracking-tighter"
+          className="text-6xl md:text-9xl font-black italic text-foreground tracking-tighter tabular-nums"
         >
-          {formatDistance(currentActivity.distance)}
+          <RollingNumber
+            value={formatDistance(currentActivity.distance)}
+            delay={2 * STAGGER}
+            reducedMotion={reducedMotion}
+          />
           <span className="text-base text-neutral-500 ml-2 font-normal tracking-normal italic">
             mi
           </span>
         </motion.p>
 
         {/* Stat row */}
-        <div className="flex flex-row gap-8 mt-5">
+        <div className="flex flex-row gap-10 mt-10">
           <Stat
             index={3}
             label="Pace"
@@ -144,7 +150,7 @@ function Stat({
 }) {
   return (
     <motion.div variants={itemVariants(index, reducedMotion)}>
-      <p className="text-[12px] font-mono uppercase tracking-widest text-neutral-600 mb-1">
+      <p className="text-[12px] font-mono uppercase tracking-widest text-neutral-600 mb-2.5">
         {label}
       </p>
       <p className="text-base italic font-sans text-neutral-300 tabular-nums font-normal">
