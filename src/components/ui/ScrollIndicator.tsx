@@ -46,6 +46,62 @@ function clampEdge(p: number): number {
   return Math.min(1, Math.max(0, p));
 }
 
+// Renders the static pace graph (fills + curve, no focus falloff) into an
+// offscreen canvas at the sidebar's buffer resolution
+function renderGraph(
+  dev: Float32Array,
+  maxAbs: number,
+  cssW: number,
+  cssH: number,
+  dpr: number
+): HTMLCanvasElement {
+  const off = document.createElement("canvas");
+  off.width = Math.round(cssW * dpr);
+  off.height = Math.round(cssH * dpr);
+  const ctx = off.getContext("2d")!;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const h = cssH;
+  const cx = cssW / 2;
+  const days = dev.length - 1;
+  const xOf = (v: number) => cx - (v / maxAbs) * GRAPH_HALF_WIDTH;
+
+  const curve = new Path2D();
+  const area = new Path2D();
+  area.moveTo(cx, 0);
+  for (let d = 0; d <= days; d++) {
+    const x = xOf(dev[d]);
+    const y = (d / days) * h;
+    if (d === 0) curve.moveTo(x, y);
+    else curve.lineTo(x, y);
+    area.lineTo(x, y);
+  }
+  area.lineTo(cx, h);
+  area.closePath();
+
+  const sides: [number, number, string][] = [
+    [0, cx, AHEAD_RGB], // ahead — left of the baseline
+    [cx, cssW - cx, BEHIND_RGB], // behind — right of it
+  ];
+  for (const [clipX, clipW, rgb] of sides) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(clipX, 0, clipW, h);
+    ctx.clip();
+    const edgeX = clipX === 0 ? cx - GRAPH_HALF_WIDTH : cx + GRAPH_HALF_WIDTH;
+    const fill = ctx.createLinearGradient(cx, 0, edgeX, 0);
+    fill.addColorStop(0, `rgba(${rgb}, 0.02)`);
+    fill.addColorStop(1, `rgba(${rgb}, 0.45)`);
+    ctx.fillStyle = fill;
+    ctx.fill(area);
+    ctx.strokeStyle = `rgb(${rgb})`;
+    ctx.lineWidth = 1.25;
+    ctx.lineJoin = "round";
+    ctx.stroke(curve);
+    ctx.restore();
+  }
+  return off;
+}
+
 // Velocity-aware spring — overshoots then settles
 function springLerp(current: number, target: number, velocity: number, stiffness: number, damping: number, dt: number) {
   const displacement = current - target;
@@ -123,6 +179,17 @@ export function ScrollIndicator() {
   // Per-tick length spring — a light touch of overshoot as ticks grow/shrink,
   // indexed to match dayPositionsRef; entries are created lazily.
   const tickSpringsRef = useRef<{ value: number; velocity: number }[]>([]);
+  // Per-frame tick geometry (reused array) and redraw bookkeeping
+  const tickDrawRef = useRef<{ y: number; len: number; width: number; color: string }[]>([]);
+  const lastDrawRef = useRef<{
+    dot: number;
+    t: number;
+    hover: number | null;
+    idx: number;
+    dev: Float32Array | null;
+    trail: number;
+  }>({ dot: -1, t: -1, hover: null, idx: -1, dev: null, trail: 0 });
+  const graphCacheRef = useRef<{ canvas: HTMLCanvasElement; dev: Float32Array; bufW: number; bufH: number } | null>(null);
 
   useEffect(() => {
     hoverTarget.current = hovered ? 1 : 0;
@@ -276,7 +343,7 @@ export function ScrollIndicator() {
         ghostRef.current.style.opacity = `${Math.min(ghostOpacity, 0.35)}`;
       }
 
-      // Trail canvas — fading wake particles + activity tick marks
+      // Trail canvas — pace graph, activity tick marks, fading wake
       const canvas = trailCanvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext("2d");
@@ -287,89 +354,26 @@ export function ScrollIndicator() {
           const cssH = canvas.clientHeight || 400;
           const bufW = Math.round(cssW * dpr);
           const bufH = Math.round(cssH * dpr);
+          let resized = false;
           if (canvas.width !== bufW || canvas.height !== bufH) {
             canvas.width = bufW;
             canvas.height = bufH;
+            resized = true;
           }
-          ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-          ctx.clearRect(0, 0, cssW, cssH);
-
-          // Logical coordinates — draw in CSS pixels
           const h = cssH;
           const cx = cssW / 2;
 
-          // Pace graph — deviation from an even pace over the year. The
-          // baseline is the 1:1 line; the area between it and the curve is
-          // shaded by sign, fading toward the baseline so near-pace stretches
-          // read as quiet and big swings read as saturated.
-          const dev = deviationRef.current;
-          if (dev.length > 1) {
-            const maxAbs = maxDeviationRef.current;
-            const days = dev.length - 1;
-            const xOf = (v: number) => cx - (v / maxAbs) * GRAPH_HALF_WIDTH;
-
-            const curve = new Path2D();
-            const area = new Path2D();
-            area.moveTo(cx, 0);
-            for (let d = 0; d <= days; d++) {
-              const x = xOf(dev[d]);
-              const y = (d / days) * h;
-              if (d === 0) curve.moveTo(x, y);
-              else curve.lineTo(x, y);
-              area.lineTo(x, y);
-            }
-            area.lineTo(cx, h);
-            area.closePath();
-
-            const sides: [number, number, string][] = [
-              [0, cx, AHEAD_RGB], // ahead — left of the baseline
-              [cx, cssW - cx, BEHIND_RGB], // behind — right of it
-            ];
-            for (const [clipX, clipW, rgb] of sides) {
-              ctx.save();
-              ctx.beginPath();
-              ctx.rect(clipX, 0, clipW, h);
-              ctx.clip();
-              const edgeX = clipX === 0 ? cx - GRAPH_HALF_WIDTH : cx + GRAPH_HALF_WIDTH;
-              const fill = ctx.createLinearGradient(cx, 0, edgeX, 0);
-              fill.addColorStop(0, `rgba(${rgb}, 0.02)`);
-              fill.addColorStop(1, `rgba(${rgb}, 0.45)`);
-              ctx.fillStyle = fill;
-              ctx.fill(area);
-              ctx.strokeStyle = `rgb(${rgb})`;
-              ctx.lineWidth = 1.25;
-              ctx.lineJoin = "round";
-              ctx.stroke(curve);
-              ctx.restore();
-            }
-
-            // Focus falloff — full strength around the active dot, dimmer
-            // toward the ends (brightens on hover)
-            // (the dot travels in the same day-of-year space as the graph)
-            const p = clampEdge(delayedProgress.current);
-            const edge = 0.35 + t * 0.4;
-            const focus = ctx.createLinearGradient(0, 0, 0, h);
-            focus.addColorStop(0, `rgba(0,0,0,${edge})`);
-            focus.addColorStop(Math.max(0, p - 0.25), `rgba(0,0,0,${edge})`);
-            focus.addColorStop(Math.max(0, p - 0.04), "rgba(0,0,0,1)");
-            focus.addColorStop(Math.min(1, p + 0.04), "rgba(0,0,0,1)");
-            focus.addColorStop(Math.min(1, p + 0.25), `rgba(0,0,0,${edge})`);
-            focus.addColorStop(1, `rgba(0,0,0,${edge})`);
-            ctx.globalCompositeOperation = "destination-in";
-            ctx.fillStyle = focus;
-            ctx.fillRect(0, 0, cssW, h);
-            ctx.globalCompositeOperation = "source-over";
-          }
-
-          // Activity tick marks — horizontal lines that grow near the active dot,
-          // and reach out toward the cursor's side when hover-proximate.
+          // ── Tick springs — always stepped so motion stays continuous ──
+          // Activity tick marks are horizontal lines that grow near the active
+          // dot, and reach out toward the cursor's side when hover-proximate.
           const curIdx = useActivityStore.getState().currentIndex;
           const ratios = ratiosRef.current;
           const dotPos = delayedProgress.current; // spring-delayed position
           const hoverPos = hoveredProgress.current; // mouse position (null when not hovering)
-          const anchorX = cx; // center of the track line
+          const ticks = tickDrawRef.current;
+          ticks.length = positions.length;
+          let ticksMoving = false;
           for (let i = 0; i < positions.length; i++) {
-            const y = positions[i] * h;
             const isCurrent = i === curIdx;
 
             // Proximity: how close is this tick to the active dot (0-1, 1 = on
@@ -407,34 +411,103 @@ export function ScrollIndicator() {
             const springed = springLerp(tickSpring.value, targetLen, tickSpring.velocity, 320, 26, dt);
             tickSpring.value = springed.value;
             tickSpring.velocity = springed.velocity;
-            const tickLen = tickSpring.value;
+            if (Math.abs(springed.velocity) > 0.01 || Math.abs(springed.value - targetLen) > 0.05) {
+              ticksMoving = true;
+            }
 
             // Ticks are run markers — the pace graph carries the color now, so
             // they stay neutral and brighten near the dot/cursor. The current
             // run keeps its pace color to tie the tick to the dot.
-            const lineW = isCurrent ? 2.5 : 1 + hoverProximity * 1;
-            const color = isCurrent && ratios[i] !== undefined
-              ? focusColor(getPaceBandColor(ratios[i]))
-              : `rgba(255, 255, 255, ${0.22 + effectiveProximity * 0.5})`;
-
-            ctx.beginPath();
-            ctx.moveTo(anchorX, y);
-            ctx.lineTo(anchorX - tickLen, y);
-            ctx.strokeStyle = color;
-            ctx.lineWidth = lineW;
-            ctx.lineCap = "butt";
-            ctx.stroke();
+            ticks[i] = {
+              y: positions[i] * h,
+              len: tickSpring.value,
+              width: isCurrent ? 2.5 : 1 + hoverProximity * 1,
+              color: isCurrent && ratios[i] !== undefined
+                ? focusColor(getPaceBandColor(ratios[i]))
+                : `rgba(255, 255, 255, ${0.22 + effectiveProximity * 0.5})`,
+            };
           }
 
-          // Trail wake particles
-          for (const point of trailHistory.current) {
-            const alpha = Math.max(0, 1 - point.age / 0.6) * 0.45;
-            const radius = 3 * (1 - point.age / 0.6);
-            const y = point.pos * h;
-            ctx.beginPath();
-            ctx.arc(cx, y, Math.max(0.5, radius), 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
-            ctx.fill();
+          // ── Skip the redraw when nothing visible changed ──
+          const dev = deviationRef.current;
+          const last = lastDrawRef.current;
+          const needsDraw =
+            resized ||
+            ticksMoving ||
+            trailHistory.current.length > 0 ||
+            last.trail > 0 ||
+            Math.abs(dotPos - last.dot) > 1e-4 ||
+            Math.abs(t - last.t) > 1e-3 ||
+            hoverPos !== last.hover ||
+            curIdx !== last.idx ||
+            dev !== last.dev;
+
+          if (needsDraw) {
+            last.dot = dotPos;
+            last.t = t;
+            last.hover = hoverPos;
+            last.idx = curIdx;
+            last.dev = dev;
+            last.trail = trailHistory.current.length;
+
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, cssW, cssH);
+
+            // Pace graph — deviation from an even pace over the year. The
+            // baseline is the 1:1 line; the area between it and the curve is
+            // shaded by sign, fading toward the baseline so near-pace stretches
+            // read as quiet and big swings read as saturated. Static, so it's
+            // rendered once into an offscreen canvas and just composited here.
+            if (dev.length > 1) {
+              const cache = graphCacheRef.current;
+              if (!cache || cache.dev !== dev || cache.bufW !== bufW || cache.bufH !== bufH) {
+                graphCacheRef.current = {
+                  canvas: renderGraph(dev, maxDeviationRef.current, cssW, cssH, dpr),
+                  dev,
+                  bufW,
+                  bufH,
+                };
+              }
+              ctx.drawImage(graphCacheRef.current!.canvas, 0, 0, cssW, cssH);
+
+              // Focus falloff — full strength around the active dot, dimmer
+              // toward the ends (brightens on hover)
+              // (the dot travels in the same day-of-year space as the graph)
+              const p = clampEdge(dotPos);
+              const edge = 0.35 + t * 0.4;
+              const focus = ctx.createLinearGradient(0, 0, 0, h);
+              focus.addColorStop(0, `rgba(0,0,0,${edge})`);
+              focus.addColorStop(Math.max(0, p - 0.25), `rgba(0,0,0,${edge})`);
+              focus.addColorStop(Math.max(0, p - 0.04), "rgba(0,0,0,1)");
+              focus.addColorStop(Math.min(1, p + 0.04), "rgba(0,0,0,1)");
+              focus.addColorStop(Math.min(1, p + 0.25), `rgba(0,0,0,${edge})`);
+              focus.addColorStop(1, `rgba(0,0,0,${edge})`);
+              ctx.globalCompositeOperation = "destination-in";
+              ctx.fillStyle = focus;
+              ctx.fillRect(0, 0, cssW, h);
+              ctx.globalCompositeOperation = "source-over";
+            }
+
+            ctx.lineCap = "butt";
+            for (const tick of ticks) {
+              ctx.beginPath();
+              ctx.moveTo(cx, tick.y);
+              ctx.lineTo(cx - tick.len, tick.y);
+              ctx.strokeStyle = tick.color;
+              ctx.lineWidth = tick.width;
+              ctx.stroke();
+            }
+
+            // Trail wake particles
+            for (const point of trailHistory.current) {
+              const alpha = Math.max(0, 1 - point.age / 0.6) * 0.45;
+              const radius = 3 * (1 - point.age / 0.6);
+              const y = point.pos * h;
+              ctx.beginPath();
+              ctx.arc(cx, y, Math.max(0.5, radius), 0, Math.PI * 2);
+              ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+              ctx.fill();
+            }
           }
         }
       }

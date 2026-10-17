@@ -33,6 +33,10 @@ export default function AppPage() {
   const warmupStarted = useRef(false);
   const doneWithNoData = !isLoading && activities.length === 0 && warmupDone;
   const isAtToday = currentIndex >= activities.length;
+  // The intro glides through the last few runs into Today — keep their stats
+  // hidden on the way so first load lands cleanly on the dashboard
+  const [introDone, setIntroDone] = useState(false);
+  if (!introDone && isAtToday && activities.length > 0) setIntroDone(true);
 
   // When the first activities arrive, kick off a warmup window:
   // the 3D scene renders behind the loading screen for 400ms so shaders
@@ -77,7 +81,11 @@ export default function AppPage() {
 
       {doneWithNoData && <EmptyState error={error} />}
 
-      <Scene activityCount={activities.length} isLoading={activities.length === 0} />
+      <Scene
+        activityCount={activities.length}
+        isLoading={activities.length === 0}
+        paused={isAtToday && introDone}
+      />
 
       {/* Today summary — driven by scroll position */}
       <AnimatePresence>
@@ -107,7 +115,7 @@ export default function AppPage() {
             <HUD>
               {/* RunStats — hidden when at Today (currentActivity will be null) */}
               <AnimatePresence>
-                {!isAtToday && (
+                {!isAtToday && introDone && (
                   <motion.div
                     key="run-stats"
                     className="absolute inset-0"

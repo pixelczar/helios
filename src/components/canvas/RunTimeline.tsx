@@ -256,6 +256,9 @@ export function RunTimeline() {
     sp.value += sp.velocity * dt;
 
     groupRef.current.position.z = sp.value;
+    // When the scene is paused (frameloop "demand" under the dashboard),
+    // keep frames coming until the spring settles
+    if (Math.abs(sp.velocity) > 1e-3 || Math.abs(targetZ - sp.value) > 1e-3) state.invalidate();
     morphState.timelineIndex = sp.value / RUN_SPACING;
 
     // rawIndex: 0 = oldest, N-1 = newest, N = Today

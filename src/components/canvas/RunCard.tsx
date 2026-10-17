@@ -98,7 +98,11 @@ export function RunCard({
     // in the second, so outgoing and incoming runs are both at full strength
     // mid-transition (maximum overlap) and nothing lingers once settled
     const vis = 1 - THREE.MathUtils.smoothstep(distFromCenter, 0.5, 1.0);
-    groupRef.current.traverse((child) => {
+
+    // Fully faded runs are skipped entirely — otherwise every mounted map
+    // and tube is still submitted to the GPU at zero opacity
+    groupRef.current.visible = vis > 0.002;
+    if (groupRef.current.visible) groupRef.current.traverse((child) => {
       if ((child as THREE.Mesh).material) {
         const mat = (child as THREE.Mesh).material as THREE.Material & {
           opacity: number;

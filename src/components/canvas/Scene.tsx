@@ -1,9 +1,9 @@
 "use client";
 
 import { Canvas } from "@react-three/fiber";
-import { ScrollControls } from "@react-three/drei";
+import { ScrollControls, PerformanceMonitor } from "@react-three/drei";
 import { CameraPan } from "./CameraPan";
-import { Suspense } from "react";
+import { Suspense, useState } from "react";
 import { RunTimeline } from "./RunTimeline";
 import { PostProcessing } from "./PostProcessing";
 import { Background } from "./Background";
@@ -13,24 +13,30 @@ import { useIsMobile } from "@/hooks/useMediaQuery";
 interface SceneProps {
   activityCount: number;
   isLoading?: boolean;
+  /** The Today overlay covers the scene — render only while something moves */
+  paused?: boolean;
 }
 
-export function Scene({ activityCount, isLoading = false }: SceneProps) {
+export function Scene({ activityCount, isLoading = false, paused = false }: SceneProps) {
   const { theme } = useTheme();
   const bgColor = theme === "dark" ? "#000000" : "#f5f5f5";
   const isMobile = useIsMobile();
+  // Adaptive resolution: start at full sharpness, step down only if the
+  // frame rate actually sags, and climb back when it recovers
+  const maxDpr = isMobile ? 1.5 : 2;
+  const [dpr, setDpr] = useState(maxDpr);
   // +1 for the "Today" summary slot at offset 0
   const pages = Math.max(activityCount + 1, 2);
 
   return (
     <Canvas
-      frameloop={isLoading ? "demand" : "always"}
+      frameloop={isLoading || paused ? "demand" : "always"}
       gl={{
         antialias: !isMobile,
         alpha: false,
         powerPreference: isMobile ? "default" : "high-performance",
       }}
-      dpr={isMobile ? [1, 1.5] : [1, 2]}
+      dpr={Math.min(dpr, typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1)}
       camera={{ position: [0, 0, 5], fov: 60, near: 0.1, far: 2000 }}
       onCreated={({ gl }) => {
         // Reading shader info logs forces a sync GPU round-trip per program
@@ -47,6 +53,10 @@ export function Scene({ activityCount, isLoading = false }: SceneProps) {
     >
       <color attach="background" args={[bgColor]} />
       <fog attach="fog" args={[bgColor, 10, 40]} />
+      <PerformanceMonitor
+        factor={1}
+        onChange={({ factor }) => setDpr(Math.round((1 + (maxDpr - 1) * factor) * 4) / 4)}
+      />
       <Suspense fallback={null}>
         <Background />
         {activityCount > 0 && (

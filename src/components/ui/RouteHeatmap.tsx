@@ -130,7 +130,9 @@ export function RouteHeatmap({ routes, highlightId, reducedMotion }: RouteHeatma
   }, [highlight, toScreen]);
 
   return (
-    <div className="absolute inset-0" aria-hidden="true">
+    // Opaque: the dashboard fully covers the 3D scene (so runs don't show
+    // through mid-transition, and the scene can stop rendering underneath)
+    <div className="absolute inset-0 bg-black" aria-hidden="true">
       <motion.canvas
         ref={canvasRef}
         className="absolute inset-0 w-full h-full"

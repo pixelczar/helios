@@ -47,7 +47,9 @@ export function PostProcessing() {
   });
 
   return (
-    <EffectComposer frameBufferType={HalfFloatType}>
+    // 4× MSAA (library default is 8×) — indistinguishable under bloom + grain,
+    // roughly half the multisample cost at retina resolution
+    <EffectComposer frameBufferType={HalfFloatType} multisampling={isMobile ? 0 : 4}>
       <Bloom
         intensity={isMobile ? values.intensity * 0.5 : values.intensity}
         luminanceThreshold={values.threshold}

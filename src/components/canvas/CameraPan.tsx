@@ -113,7 +113,7 @@ export function CameraPan() {
     };
   }, [gl, events]);
 
-  useFrame(() => {
+  useFrame((state) => {
     const s = ref.current;
 
     // Spring back to center when the activity changes
@@ -165,6 +165,9 @@ export function CameraPan() {
         s.returning = false;
       }
     }
+
+    // Keep frames coming while panning/settling if the scene is paused
+    if (s.down || s.returning || s.vx !== 0 || s.vy !== 0) state.invalidate();
 
     camera.position.x = s.x;
     camera.position.y = s.y + (isMobile ? MOBILE_Y_BIAS : 0);

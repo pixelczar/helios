@@ -448,24 +448,31 @@ function CardRouteTrace({
         }}
       />
 
-      {/* Tracer — a bright short segment looping around the route */}
-      {!reducedMotion && (
-        <motion.polyline
-          {...shared}
-          strokeWidth={0.22}
-          style={{ filter: `drop-shadow(0 0 3px ${color})` }}
-          initial={{ pathLength: 0.08, pathSpacing: 1, pathOffset: 0 }}
-          animate={{ pathOffset: [0, 1] }}
-          transition={{
-            pathOffset: {
-              duration: 2.6,
-              repeat: Infinity,
-              ease: "linear",
-              delay: drawDelay + 1.2,
-            },
-          }}
-        />
-      )}
+      {/* Tracer — a bright short segment looping around the route, over a
+          wider soft underlay for the glow (instead of a CSS drop-shadow,
+          which repaints a filter every frame of the loop) */}
+      {!reducedMotion &&
+        [
+          { width: 0.6, opacity: 0.22 },
+          { width: 0.22, opacity: 1 },
+        ].map(({ width, opacity }) => (
+          <motion.polyline
+            key={width}
+            {...shared}
+            strokeWidth={width}
+            opacity={opacity}
+            initial={{ pathLength: 0.08, pathSpacing: 1, pathOffset: 0 }}
+            animate={{ pathOffset: [0, 1] }}
+            transition={{
+              pathOffset: {
+                duration: 2.6,
+                repeat: Infinity,
+                ease: "linear",
+                delay: drawDelay + 1.2,
+              },
+            }}
+          />
+        ))}
     </svg>
   );
 }
