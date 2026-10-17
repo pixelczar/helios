@@ -280,7 +280,7 @@ export function TodaySummary() {
               variants={tileVariants(i, reducedMotion)}
               className="flex items-center"
             >
-              {i > 0 && <span className="w-px h-16 bg-white/10" aria-hidden="true" />}
+              {i > 0 && <span className="w-px h-16 mx-6 bg-white/10" aria-hidden="true" />}
               <RecentRunItem
                 run={run}
                 ratio={recentRunRatios[i]}
@@ -453,12 +453,14 @@ function CardRouteTrace({
           which repaints a filter every frame of the loop) */}
       {!reducedMotion &&
         [
-          { width: 0.6, opacity: 0.22 },
-          { width: 0.22, opacity: 1 },
-        ].map(({ width, opacity }) => (
+          { width: 0.75, opacity: 0.4, stroke: color },
+          { width: 0.26, opacity: 1, stroke: color },
+          { width: 0.1, opacity: 0.9, stroke: "#ffffff" }, // hot core
+        ].map(({ width, opacity, stroke }) => (
           <motion.polyline
             key={width}
             {...shared}
+            stroke={stroke}
             strokeWidth={width}
             opacity={opacity}
             initial={{ pathLength: 0.08, pathSpacing: 1, pathOffset: 0 }}
