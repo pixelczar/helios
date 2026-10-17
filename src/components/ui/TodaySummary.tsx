@@ -11,6 +11,7 @@ import {
 import { useSettingsStore } from "@/stores/settingsStore";
 import { lockSnap } from "@/lib/scrollLock";
 import { RouteHeatmap, type HeatmapRoute } from "./RouteHeatmap";
+import { RollingNumber } from "./RollingNumber";
 import { formatDistance } from "@/lib/format";
 import { getPaceBandColor } from "@/lib/colors";
 import { useActivityPhotos } from "@/hooks/useActivityPhotos";
@@ -194,7 +195,7 @@ export function TodaySummary() {
           {/* Day of year column */}
           <div className="flex flex-col items-end gap-2">
             <span className="text-6xl md:text-8xl font-black tracking-tighter text-neutral-400 leading-none">
-              {todayData.dayOfYear}
+              <RollingNumber value={String(todayData.dayOfYear)} delay={STAGGER} reducedMotion={reducedMotion} />
             </span>
             <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1 not-italic">
               Days
@@ -215,7 +216,7 @@ export function TodaySummary() {
                 textShadow: `0 0 40px ${deltaColor}20`,
               }}
             >
-              {todayData.totalMiles.toFixed(1)}
+              <RollingNumber value={todayData.totalMiles.toFixed(1)} delay={STAGGER + 0.08} reducedMotion={reducedMotion} />
             </span>
             <span className="text-sm font-mono uppercase tracking-[0.2em] text-neutral-500 mt-1 not-italic">
               Total Miles

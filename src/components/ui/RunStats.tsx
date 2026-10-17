@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { motion, AnimatePresence, useReducedMotion, animate } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { RollingNumber } from "./RollingNumber";
 import { useScrollIndex } from "@/hooks/useScrollIndex";
 import { PhotoStrip } from "./PhotoStrip";
 import {
@@ -87,7 +87,11 @@ export function RunStats() {
           variants={itemVariants(2, reducedMotion)}
           className="text-6xl md:text-9xl font-black italic text-foreground tracking-tighter tabular-nums"
         >
-          <CountUp meters={currentActivity.distance} reducedMotion={reducedMotion} />
+          <RollingNumber
+            value={formatDistance(currentActivity.distance)}
+            delay={2 * STAGGER}
+            reducedMotion={reducedMotion}
+          />
           <span className="text-base text-neutral-500 ml-2 font-normal tracking-normal italic">
             mi
           </span>
@@ -129,35 +133,6 @@ export function RunStats() {
       </motion.div>
     </AnimatePresence>
   );
-}
-
-// Distance rolls up from ~80% to its final value as it blurs in — a quick
-// settle, not a slot machine. Writes straight to the DOM to skip re-renders.
-function CountUp({
-  meters,
-  reducedMotion,
-}: {
-  meters: number;
-  reducedMotion: boolean | null;
-}) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const final = formatDistance(meters);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || reducedMotion) return;
-    const controls = animate(meters * 0.8, meters, {
-      duration: 0.7,
-      delay: 2 * STAGGER,
-      ease: [0.16, 1, 0.3, 1],
-      onUpdate: (v) => {
-        el.textContent = formatDistance(v);
-      },
-    });
-    return () => controls.stop();
-  }, [meters, reducedMotion]);
-
-  return <span ref={ref}>{final}</span>;
 }
 
 function Stat({

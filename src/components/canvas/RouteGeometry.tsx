@@ -7,6 +7,7 @@ import { decodePolyline } from "@/lib/geo/polyline";
 import { normalizeRoute } from "@/lib/geo/normalize";
 import { simplifyRoute } from "@/lib/geo/simplify";
 import { buildRouteTube } from "@/lib/geo/tube";
+import { morphState } from "./motionState";
 import { useActivityStore } from "@/stores/activityStore";
 import { useRouteControls } from "./useRouteControls";
 
@@ -78,6 +79,8 @@ export function RouteGeometry({
   const tracerMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const capGlowMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const endCapRef = useRef<THREE.Mesh>(null);
+  const startCapMatRef = useRef<THREE.MeshBasicMaterial>(null);
+  const endCapMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const capPulse = useRef(0);       // current pulse intensity 0→1
   const loopPause = useRef(0);      // seconds remaining in pause between loops
   const tracerOffset = useRef(-1e-4);   // accumulated tracer scroll offset (seeded slightly negative to avoid false wrap on first frame)
@@ -272,6 +275,11 @@ export function RouteGeometry({
 
   // Priority -1 so base opacities are set BEFORE RunCard's visibility traverse (priority 0)
   useFrame(({ clock }, delta) => {
+    // Step aside while the morph line carries the shape between runs
+    const keep = 1 - morphState.routeHide;
+    if (startCapMatRef.current) startCapMatRef.current.userData.baseOpacity = keep;
+    if (endCapMatRef.current) endCapMatRef.current.userData.baseOpacity = controls.gradEndAlpha * keep;
+
     // Draw-on: reveal the tube from the start point as the card nears focus
     const vis = visibilityRef?.current ?? 1;
     const draw = prefersReducedMotion
@@ -289,7 +297,7 @@ export function RouteGeometry({
 
     // Set userData.baseOpacity so RunCard's traverse computes: opacity = base * visibility
     if (coreMatRef.current) {
-      coreMatRef.current.userData.baseOpacity = controls.coreOpacity;
+      coreMatRef.current.userData.baseOpacity = controls.coreOpacity * keep;
     }
     if (glowMatRef.current) {
       // Skip breathing animation when user prefers reduced motion
@@ -299,7 +307,7 @@ export function RouteGeometry({
             Math.sin(clock.elapsedTime * controls.glowBreatheSpeed) *
               controls.glowBreatheAmount
           : controls.glowOpacity;
-      glowMatRef.current.userData.baseOpacity = breathe;
+      glowMatRef.current.userData.baseOpacity = breathe * keep;
     }
     if (tracerMatRef.current) {
       tracerMatRef.current.userData.skipVisibility = true;
@@ -334,13 +342,13 @@ export function RouteGeometry({
         tracerAlphaMap.offset.x = tracerOffset.current;
       }
 
-      tracerMatRef.current.userData.baseOpacity = controls.tracerOpacity * tracerFade;
+      tracerMatRef.current.userData.baseOpacity = controls.tracerOpacity * tracerFade * keep;
     }
     if (capGlowMatRef.current) {
       // Decay pulse
       capPulse.current = Math.max(0, capPulse.current - delta * 3.0);
       const pulseBoost = capPulse.current * 0.6; // peak adds 0.6 opacity
-      capGlowMatRef.current.userData.baseOpacity = controls.capGlowOpacity + pulseBoost;
+      capGlowMatRef.current.userData.baseOpacity = (controls.capGlowOpacity + pulseBoost) * keep;
     }
   }, -1);
 
@@ -417,6 +425,7 @@ export function RouteGeometry({
           </mesh>
           <mesh position={firstPoint} renderOrder={1} geometry={coreCapGeo}>
             <meshBasicMaterial
+              ref={startCapMatRef}
               transparent
               color={coreColor}
               toneMapped={false}
@@ -433,6 +442,7 @@ export function RouteGeometry({
       {controls.capEnabled && lastPoint && (
         <mesh ref={endCapRef} position={lastPoint} renderOrder={1} geometry={coreCapGeo}>
           <meshBasicMaterial
+            ref={endCapMatRef}
             transparent
             color={coreColorEnd}
             toneMapped={false}

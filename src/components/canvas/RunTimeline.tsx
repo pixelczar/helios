@@ -5,6 +5,8 @@ import { useScroll } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { RunCard } from "./RunCard";
+import { MorphRoute } from "./MorphRoute";
+import { parallax } from "./motionState";
 import { useActivityStore } from "@/stores/activityStore";
 import { useGoalStore, calculateYearlyPaceAtDate } from "@/stores/goalStore";
 import { isSnapLocked } from "@/lib/scrollLock";
@@ -17,6 +19,11 @@ const MAP_WINDOW = 2;
 // Route geometry is built only near focus too — a card fades to zero one
 // step away, so building all ~90 routes up front just stalled the load
 const ROUTE_WINDOW = 3;
+// Pointer parallax — max lean of the focused run toward the cursor (radians)
+// and how quickly it follows
+const TILT_X = 0.035;
+const TILT_Y = 0.05;
+const TILT_FOLLOW = 5;
 
 export function RunTimeline() {
   const scroll = useScroll();
@@ -195,8 +202,23 @@ export function RunTimeline() {
   // Spring state for Z-axis
   const zSpring = useRef({ value: 0, velocity: 0, initialized: false });
 
-  useFrame((_, delta) => {
+  // Fine pointers only, and never with reduced motion
+  const tiltEnabled = useRef(false);
+  useEffect(() => {
+    tiltEnabled.current =
+      window.matchMedia("(pointer: fine)").matches &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  }, []);
+
+  useFrame((state, delta) => {
     if (!groupRef.current || activities.length === 0) return;
+
+    // Smoothed pointer tilt, shared with the cards and the morph line
+    const follow = 1 - Math.exp(-TILT_FOLLOW * Math.min(delta, 0.05));
+    const targetX = tiltEnabled.current ? -state.pointer.y * TILT_X : 0;
+    const targetY = tiltEnabled.current ? state.pointer.x * TILT_Y : 0;
+    parallax.x += (targetX - parallax.x) * follow;
+    parallax.y += (targetY - parallax.y) * follow;
 
     const totalDepth = totalSlots * RUN_SPACING;
     const targetZ = scroll.offset * totalDepth;
@@ -243,6 +265,8 @@ export function RunTimeline() {
   });
 
   return (
+    <>
+    <MorphRoute activities={activities} paceRatios={paceRatios} totalSlots={totalSlots} />
     <group ref={groupRef}>
       {activities.map((activity, index) => (
         <RunCard
@@ -261,5 +285,6 @@ export function RunTimeline() {
         />
       ))}
     </group>
+    </>
   );
 }

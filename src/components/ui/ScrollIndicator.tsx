@@ -564,7 +564,7 @@ export function ScrollIndicator() {
   return (
     <div
       ref={trackRef}
-      className="absolute right-4 top-1/2 h-[80vh] w-32 md:w-44 pointer-events-auto cursor-pointer select-none"
+      className="absolute right-6 md:right-10 top-1/2 h-[80vh] w-32 md:w-44 pointer-events-auto cursor-pointer select-none"
       style={{ transform: "translateY(-50%) scaleY(-1)" }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

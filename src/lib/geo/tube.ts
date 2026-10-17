@@ -15,19 +15,59 @@ export function buildRouteTube(
   radius: number,
   radialSegments: number
 ): THREE.BufferGeometry {
+  const geo = createRouteTube(points.length, radialSegments);
+  writeRouteTube(geo, points, radius, radialSegments);
+  return geo;
+}
+
+/**
+ * Allocates a tube for a fixed number of path points (index + uv layout
+ * included) so its positions can be rewritten every frame by writeRouteTube
+ * without reallocating — used by the morphing route.
+ */
+export function createRouteTube(n: number, radialSegments: number): THREE.BufferGeometry {
+  const ringSize = radialSegments + 1;
+  const indices: number[] = [];
+  for (let i = 1; i < n; i++) {
+    for (let j = 1; j <= radialSegments; j++) {
+      const a = ringSize * (i - 1) + (j - 1);
+      const b = ringSize * i + (j - 1);
+      const c = ringSize * i + j;
+      const d = ringSize * (i - 1) + j;
+      indices.push(a, b, d, b, c, d);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setIndex(indices);
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * ringSize * 3), 3));
+  geo.setAttribute("normal", new THREE.BufferAttribute(new Float32Array(n * ringSize * 3), 3));
+  geo.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(n * ringSize * 2), 2));
+  return geo;
+}
+
+/** Writes ring positions/normals/uvs for `points` into a createRouteTube geometry. */
+export function writeRouteTube(
+  geo: THREE.BufferGeometry,
+  points: ArrayLike<{ x: number; y: number; z: number }>,
+  radius: number,
+  radialSegments: number
+): void {
   const n = points.length;
   const ringSize = radialSegments + 1;
+  const positions = geo.attributes.position.array as Float32Array;
+  const normals = geo.attributes.normal.array as Float32Array;
+  const uvs = geo.attributes.uv.array as Float32Array;
 
   // Cumulative arc length → uv.x
+  let total = 0;
   const lengths = new Float32Array(n);
   for (let i = 1; i < n; i++) {
-    lengths[i] = lengths[i - 1] + points[i].distanceTo(points[i - 1]);
+    const a = points[i - 1];
+    const b = points[i];
+    total += Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+    lengths[i] = total;
   }
-  const total = lengths[n - 1] || 1;
-
-  const positions = new Float32Array(n * ringSize * 3);
-  const normals = new Float32Array(n * ringSize * 3);
-  const uvs = new Float32Array(n * ringSize * 2);
+  total = total || 1;
 
   for (let i = 0; i < n; i++) {
     // Central-difference tangent smooths the frame through corners
@@ -65,22 +105,7 @@ export function buildRouteTube(
       uvs[u + 1] = j / radialSegments;
     }
   }
-
-  const indices: number[] = [];
-  for (let i = 1; i < n; i++) {
-    for (let j = 1; j <= radialSegments; j++) {
-      const a = ringSize * (i - 1) + (j - 1);
-      const b = ringSize * i + (j - 1);
-      const c = ringSize * i + j;
-      const d = ringSize * (i - 1) + j;
-      indices.push(a, b, d, b, c, d);
-    }
-  }
-
-  const geo = new THREE.BufferGeometry();
-  geo.setIndex(indices);
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-  geo.setAttribute("normal", new THREE.BufferAttribute(normals, 3));
-  geo.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
-  return geo;
+  geo.attributes.position.needsUpdate = true;
+  geo.attributes.normal.needsUpdate = true;
+  geo.attributes.uv.needsUpdate = true;
 }
