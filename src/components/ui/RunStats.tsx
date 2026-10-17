@@ -59,7 +59,7 @@ export function RunStats() {
         {/* Date */}
         <motion.p
           variants={itemVariants(0, reducedMotion)}
-          className="text-[12px] font-mono uppercase tracking-[0.2em] text-neutral-500 mb-5"
+          className="text-[12px] font-mono uppercase tracking-[0.2em] text-neutral-500 mb-6"
         >
           {formatDate(currentActivity.start_date_local)}
         </motion.p>
@@ -67,7 +67,7 @@ export function RunStats() {
         {/* Run name */}
         <motion.p
           variants={itemVariants(1, reducedMotion)}
-          className="text-[12px] italic font-sans uppercase tracking-widest text-neutral-400 mb-4"
+          className="text-base md:text-xl italic font-sans uppercase tracking-wider text-neutral-300 leading-tight mb-6"
         >
           {currentActivity.name}
         </motion.p>
@@ -76,7 +76,7 @@ export function RunStats() {
         {!currentActivity.map.summary_polyline && (
           <motion.p
             variants={itemVariants(1, reducedMotion)}
-            className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-4"
+            className="text-[10px] font-mono uppercase tracking-widest text-neutral-600 mb-6"
           >
             Indoor run
           </motion.p>
@@ -98,7 +98,7 @@ export function RunStats() {
         </motion.p>
 
         {/* Stat row */}
-        <div className="flex flex-row gap-8 mt-8">
+        <div className="flex flex-row gap-10 mt-10">
           <Stat
             index={3}
             label="Pace"
@@ -150,7 +150,7 @@ function Stat({
 }) {
   return (
     <motion.div variants={itemVariants(index, reducedMotion)}>
-      <p className="text-[12px] font-mono uppercase tracking-widest text-neutral-600 mb-2">
+      <p className="text-[12px] font-mono uppercase tracking-widest text-neutral-600 mb-2.5">
         {label}
       </p>
       <p className="text-base italic font-sans text-neutral-300 tabular-nums font-normal">
