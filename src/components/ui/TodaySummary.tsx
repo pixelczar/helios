@@ -280,7 +280,7 @@ export function TodaySummary() {
               variants={tileVariants(i, reducedMotion)}
               className="flex items-center"
             >
-              {i > 0 && <span className="w-px h-16 mx-6 bg-white/10" aria-hidden="true" />}
+              {i > 0 && <span className="w-px h-16 mx-12 bg-white/10" aria-hidden="true" />}
               <RecentRunItem
                 run={run}
                 ratio={recentRunRatios[i]}
