@@ -94,8 +94,10 @@ export function RunCard({
     const scale = THREE.MathUtils.lerp(0.3, 1.0, visibility);
     groupRef.current.scale.setScalar(scale);
 
-    // Opacity — squared curve keeps the focused run dominant
-    const vis = Math.pow(visibility, 2.0);
+    // Opacity — hold full strength through the first half-step and fade only
+    // in the second, so outgoing and incoming runs are both at full strength
+    // mid-transition (maximum overlap) and nothing lingers once settled
+    const vis = 1 - THREE.MathUtils.smoothstep(distFromCenter, 0.5, 1.0);
     groupRef.current.traverse((child) => {
       if ((child as THREE.Mesh).material) {
         const mat = (child as THREE.Mesh).material as THREE.Material & {

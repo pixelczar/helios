@@ -249,8 +249,8 @@ export function RunTimeline() {
     }
 
     const dt = Math.min(delta, 0.04);
-    const stiffness = 180;
-    const damping = 26; // ~critically damped — quicker settle, no overshoot
+    const stiffness = 320;
+    const damping = 36; // ~critically damped — quick settle, no overshoot
     const force = stiffness * (targetZ - sp.value) - damping * sp.velocity;
     sp.velocity += force * dt;
     sp.value += sp.velocity * dt;

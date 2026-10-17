@@ -12,7 +12,7 @@ import {
   formatElevation,
 } from "@/lib/format";
 
-const STAGGER = 0.06;
+const STAGGER = 0.035;
 const EASE = [0.25, 0.1, 0.25, 1] as const;
 
 function itemVariants(i: number, reducedMotion: boolean | null) {
@@ -29,13 +29,13 @@ function itemVariants(i: number, reducedMotion: boolean | null) {
       opacity: 1,
       y: 0,
       filter: "blur(0px)",
-      transition: { duration: 0.45, delay: i * STAGGER, ease: EASE },
+      transition: { duration: 0.3, delay: i * STAGGER, ease: EASE },
     },
     exit: {
       opacity: 0,
       y: -10,
       filter: "blur(4px)",
-      transition: { duration: 0.22, delay: i * 0.015, ease: EASE },
+      transition: { duration: 0.15, delay: i * 0.01, ease: EASE },
     },
   };
 }

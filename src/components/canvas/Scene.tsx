@@ -50,7 +50,7 @@ export function Scene({ activityCount, isLoading = false }: SceneProps) {
       <Suspense fallback={null}>
         <Background />
         {activityCount > 0 && (
-          <ScrollControls pages={pages} damping={0.16} distance={1}>
+          <ScrollControls pages={pages} damping={0.1} distance={1}>
             {/* No <Scroll> wrapper — we handle Z translation manually.
                 <Scroll> auto-translates children on Y axis which we don't want. */}
             <RunTimeline />
